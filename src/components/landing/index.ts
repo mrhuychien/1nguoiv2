@@ -1,0 +1,11 @@
+export { Navbar } from "./navbar";
+export { HeroSection } from "./hero-section";
+export { ProblemSection } from "./problem-section";
+export { PillarsSection } from "./pillars-section";
+export { ToolsSection } from "./tools-section";
+export { PersonasSection } from "./personas-section";
+export { BuildInPublicSection } from "./build-in-public-section";
+export { PricingSection } from "./pricing-section";
+export { FAQSection } from "./faq-section";
+export { CTASection } from "./cta-section";
+export { Footer } from "./footer";
