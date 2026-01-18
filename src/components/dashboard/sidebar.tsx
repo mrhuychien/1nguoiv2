@@ -35,7 +35,7 @@ const navItems = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user, profile, signOut } = useUser();
+  const { userInfo, signOut } = useUser();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const getInitials = (name: string | null) => {
@@ -133,18 +133,18 @@ export function Sidebar() {
             )}
           >
             <Avatar className="h-9 w-9">
-              <AvatarImage src={profile?.avatar_url || ""} />
+              <AvatarImage src={userInfo?.avatarUrl || ""} />
               <AvatarFallback>
-                {getInitials(profile?.full_name || user?.email || null)}
+                {getInitials(userInfo?.fullName || userInfo?.email || null)}
               </AvatarFallback>
             </Avatar>
             {!isCollapsed && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-text-primary truncate">
-                  {profile?.full_name || "User"}
+                  {userInfo?.fullName || "User"}
                 </p>
                 <p className="text-xs text-text-muted truncate">
-                  {user?.email}
+                  {userInfo?.email}
                 </p>
               </div>
             )}

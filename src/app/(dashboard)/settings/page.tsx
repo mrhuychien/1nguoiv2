@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navbar } from "@/components/dashboard/navbar";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,12 +8,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUser } from "@/hooks/use-user";
-import { User, Mail, Bell, Shield, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { User, Mail, Bell, Shield, Loader2, Check } from "lucide-react";
 
 export default function SettingsPage() {
-  const { user, profile, signOut } = useUser();
-  const [fullName, setFullName] = useState(profile?.full_name || "");
+  const { userInfo, signOut, user } = useUser();
+  const [fullName, setFullName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    if (userInfo?.fullName) {
+      setFullName(userInfo.fullName);
+    }
+  }, [userInfo?.fullName]);
 
   const getInitials = (name: string | null) => {
     if (!name) return "U";
@@ -26,9 +34,32 @@ export default function SettingsPage() {
   };
 
   const handleSave = async () => {
+    if (!user) return;
+
     setIsSaving(true);
-    // Save profile logic here
-    setTimeout(() => setIsSaving(false), 1000);
+    setSaveSuccess(false);
+
+    try {
+      const supabase = createClient();
+      const updateData = {
+        full_name: fullName,
+        updated_at: new Date().toISOString(),
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from("profiles")
+        .update(updateData)
+        .eq("id", user.id);
+
+      if (!error) {
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      }
+    } catch (error) {
+      console.error("Error saving profile:", error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -50,18 +81,23 @@ export default function SettingsPage() {
             {/* Avatar */}
             <div className="flex items-center gap-4">
               <Avatar className="h-20 w-20">
-                <AvatarImage src={profile?.avatar_url || ""} />
+                <AvatarImage src={userInfo?.avatarUrl || ""} />
                 <AvatarFallback className="text-xl">
-                  {getInitials(profile?.full_name || user?.email || null)}
+                  {getInitials(userInfo?.fullName || userInfo?.email || null)}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <Button variant="outline" size="sm">
-                  Đổi ảnh đại diện
-                </Button>
-                <p className="text-xs text-text-muted mt-1">
-                  JPG, PNG. Tối đa 1MB.
+                <p className="font-medium text-text-primary">
+                  {userInfo?.fullName || "Chưa cập nhật tên"}
                 </p>
+                <p className="text-sm text-text-muted">
+                  {userInfo?.email}
+                </p>
+                {userInfo?.avatarUrl && (
+                  <p className="text-xs text-success mt-1">
+                    Ảnh từ Google
+                  </p>
+                )}
               </div>
             </div>
 
@@ -83,7 +119,7 @@ export default function SettingsPage() {
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
                 <Input
                   id="email"
-                  value={user?.email || ""}
+                  value={userInfo?.email || ""}
                   disabled
                   className="pl-10 bg-background-tertiary"
                 />
@@ -93,10 +129,18 @@ export default function SettingsPage() {
               </p>
             </div>
 
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Lưu thay đổi
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button onClick={handleSave} disabled={isSaving}>
+                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {saveSuccess && <Check className="mr-2 h-4 w-4" />}
+                {saveSuccess ? "Đã lưu" : "Lưu thay đổi"}
+              </Button>
+              {saveSuccess && (
+                <span className="text-sm text-success">
+                  Cập nhật thành công!
+                </span>
+              )}
+            </div>
           </CardContent>
         </Card>
 
