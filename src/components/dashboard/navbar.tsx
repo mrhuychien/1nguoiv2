@@ -1,29 +1,42 @@
 "use client";
 
-import { Bell, Search } from "lucide-react";
+import { Bell, Search, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TimerMini } from "./timer-mini";
 
 interface NavbarProps {
   title?: string;
+  onMenuClick?: () => void;
 }
 
-export function Navbar({ title }: NavbarProps) {
+export function Navbar({ title, onMenuClick }: NavbarProps) {
   return (
-    <header className="h-16 border-b border-border bg-background-secondary/50 backdrop-blur-sm sticky top-0 z-30">
-      <div className="h-full flex items-center justify-between px-6">
-        {/* Title */}
-        <div>
+    <header className="h-14 md:h-16 border-b border-border bg-background-secondary/50 backdrop-blur-sm sticky top-0 z-30">
+      <div className="h-full flex items-center justify-between px-4 md:px-6">
+        {/* Left side - Menu button for mobile + Title */}
+        <div className="flex items-center gap-3">
+          {/* Mobile menu button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden flex-shrink-0"
+            onClick={onMenuClick}
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+
           {title && (
-            <h1 className="text-xl font-semibold text-text-primary">{title}</h1>
+            <h1 className="text-lg md:text-xl font-semibold text-text-primary truncate">
+              {title}
+            </h1>
           )}
         </div>
 
         {/* Right side */}
-        <div className="flex items-center gap-4">
-          {/* Search */}
-          <div className="hidden md:flex relative">
+        <div className="flex items-center gap-2 md:gap-4">
+          {/* Search - hidden on mobile */}
+          <div className="hidden lg:flex relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
             <Input
               type="search"
@@ -32,8 +45,15 @@ export function Navbar({ title }: NavbarProps) {
             />
           </div>
 
-          {/* Timer */}
-          <TimerMini />
+          {/* Search icon for mobile */}
+          <Button variant="ghost" size="icon" className="lg:hidden">
+            <Search className="h-5 w-5" />
+          </Button>
+
+          {/* Timer - smaller on mobile */}
+          <div className="hidden sm:block">
+            <TimerMini />
+          </div>
 
           {/* Notifications */}
           <Button variant="ghost" size="icon" className="relative">

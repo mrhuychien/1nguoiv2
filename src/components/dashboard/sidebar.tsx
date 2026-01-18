@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Lightbulb, FolderKanban, Settings, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Lightbulb, FolderKanban, Settings, LogOut, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useUser } from "@/hooks/use-user";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const navItems = [
   {
@@ -33,10 +33,22 @@ const navItems = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  isMobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const { userInfo, signOut } = useUser();
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Close mobile sidebar when route changes
+  useEffect(() => {
+    if (onMobileClose) {
+      onMobileClose();
+    }
+  }, [pathname, onMobileClose]);
 
   const getInitials = (name: string | null) => {
     if (!name) return "U";
@@ -48,33 +60,62 @@ export function Sidebar() {
       .slice(0, 2);
   };
 
+  const handleSignOut = () => {
+    signOut();
+    if (onMobileClose) onMobileClose();
+  };
+
   return (
     <TooltipProvider delayDuration={0}>
+      {/* Mobile overlay */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={onMobileClose}
+        />
+      )}
+
       <aside
         className={cn(
-          "fixed left-0 top-0 z-40 h-screen bg-background-secondary border-r border-border flex flex-col transition-all duration-300",
-          isCollapsed ? "w-16" : "w-64"
+          "fixed left-0 top-0 z-50 h-screen bg-background-secondary border-r border-border flex flex-col transition-all duration-300",
+          // Desktop styles
+          "hidden md:flex",
+          isCollapsed ? "md:w-16" : "md:w-64",
+          // Mobile styles - slide in from left
+          isMobileOpen && "flex w-72 md:w-64"
         )}
       >
         {/* Logo */}
         <div className={cn(
           "h-16 flex items-center border-b border-border px-4",
-          isCollapsed ? "justify-center" : "justify-between"
+          isCollapsed && !isMobileOpen ? "justify-center" : "justify-between"
         )}>
-          <Link href="/dashboard" className="flex items-center gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2" onClick={onMobileClose}>
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-cyan to-purple flex items-center justify-center flex-shrink-0">
               <span className="text-white font-bold text-sm">1</span>
             </div>
-            {!isCollapsed && (
+            {(!isCollapsed || isMobileOpen) && (
               <span className="font-semibold text-lg text-text-primary">
                 1nguoi
               </span>
             )}
           </Link>
-          {!isCollapsed && (
+
+          {/* Mobile close button */}
+          {isMobileOpen && (
+            <button
+              onClick={onMobileClose}
+              className="p-1.5 rounded-md hover:bg-background-tertiary text-text-muted hover:text-text-secondary transition-colors md:hidden"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
+
+          {/* Desktop collapse button */}
+          {!isCollapsed && !isMobileOpen && (
             <button
               onClick={() => setIsCollapsed(true)}
-              className="p-1.5 rounded-md hover:bg-background-tertiary text-text-muted hover:text-text-secondary transition-colors"
+              className="p-1.5 rounded-md hover:bg-background-tertiary text-text-muted hover:text-text-secondary transition-colors hidden md:block"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -82,11 +123,11 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-1">
-          {isCollapsed && (
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+          {isCollapsed && !isMobileOpen && (
             <button
               onClick={() => setIsCollapsed(false)}
-              className="w-full p-2 rounded-lg hover:bg-background-tertiary text-text-muted hover:text-text-secondary transition-colors flex items-center justify-center mb-2"
+              className="w-full p-2 rounded-lg hover:bg-background-tertiary text-text-muted hover:text-text-secondary transition-colors flex items-center justify-center mb-2 hidden md:flex"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -98,20 +139,21 @@ export function Sidebar() {
             const linkContent = (
               <Link
                 href={item.href}
+                onClick={onMobileClose}
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors",
                   isActive
                     ? "bg-cyan/10 text-cyan"
                     : "text-text-secondary hover:text-text-primary hover:bg-background-tertiary",
-                  isCollapsed && "justify-center px-2"
+                  isCollapsed && !isMobileOpen && "justify-center px-2"
                 )}
               >
                 <Icon className="h-5 w-5 flex-shrink-0" />
-                {!isCollapsed && <span className="text-sm font-medium">{item.label}</span>}
+                {(!isCollapsed || isMobileOpen) && <span className="text-sm font-medium">{item.label}</span>}
               </Link>
             );
 
-            if (isCollapsed) {
+            if (isCollapsed && !isMobileOpen) {
               return (
                 <Tooltip key={item.href}>
                   <TooltipTrigger asChild>{linkContent}</TooltipTrigger>
@@ -129,7 +171,7 @@ export function Sidebar() {
           <div
             className={cn(
               "flex items-center gap-3 p-2 rounded-lg",
-              isCollapsed && "justify-center"
+              isCollapsed && !isMobileOpen && "justify-center"
             )}
           >
             <Avatar className="h-9 w-9">
@@ -138,7 +180,7 @@ export function Sidebar() {
                 {getInitials(userInfo?.fullName || userInfo?.email || null)}
               </AvatarFallback>
             </Avatar>
-            {!isCollapsed && (
+            {(!isCollapsed || isMobileOpen) && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-text-primary truncate">
                   {userInfo?.fullName || "User"}
@@ -148,13 +190,13 @@ export function Sidebar() {
                 </p>
               </div>
             )}
-            {!isCollapsed && (
+            {(!isCollapsed || isMobileOpen) && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={signOut}
+                    onClick={handleSignOut}
                     className="flex-shrink-0"
                   >
                     <LogOut className="h-4 w-4" />
@@ -164,13 +206,13 @@ export function Sidebar() {
               </Tooltip>
             )}
           </div>
-          {isCollapsed && (
+          {isCollapsed && !isMobileOpen && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={signOut}
+                  onClick={handleSignOut}
                   className="w-full mt-2"
                 >
                   <LogOut className="h-4 w-4" />

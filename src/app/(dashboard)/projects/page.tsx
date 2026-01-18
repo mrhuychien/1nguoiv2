@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Navbar } from "@/components/dashboard/navbar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useProjectStore, mockProjects, mockTasks } from "@/store/project-store";
@@ -601,9 +600,7 @@ export default function ProjectsPage() {
   ];
 
   return (
-    <>
-      <Navbar title="Quản lý Dự án" />
-      <div className="p-6 md:p-8 space-y-8 overflow-y-auto">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8 overflow-y-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
@@ -759,16 +756,15 @@ export default function ProjectsPage() {
             </Button>
           </div>
         )}
-      </div>
 
-      {/* Project Modal */}
-      <ProjectModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={handleSaveProject}
-        project={editingProject}
-        mode={modalMode}
-      />
-    </>
+        {/* Project Modal */}
+        <ProjectModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSave={handleSaveProject}
+          project={editingProject}
+          mode={modalMode}
+        />
+      </div>
   );
 }
