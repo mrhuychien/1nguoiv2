@@ -42,10 +42,13 @@ export interface Database {
           title: string
           description: string | null
           status: 'active' | 'completed' | 'archived'
+          lifecycle: 'idea' | 'designing' | 'building' | 'testing' | 'shipped' | 'paused'
           health: 'on-track' | 'at-risk' | 'blocked'
           is_focus: boolean
           progress: number
           deadline: string | null
+          last_task: string | null
+          current_task: string | null
           created_at: string
           updated_at: string
         }
@@ -55,10 +58,13 @@ export interface Database {
           title: string
           description?: string | null
           status?: 'active' | 'completed' | 'archived'
+          lifecycle?: 'idea' | 'designing' | 'building' | 'testing' | 'shipped' | 'paused'
           health?: 'on-track' | 'at-risk' | 'blocked'
           is_focus?: boolean
           progress?: number
           deadline?: string | null
+          last_task?: string | null
+          current_task?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -68,10 +74,13 @@ export interface Database {
           title?: string
           description?: string | null
           status?: 'active' | 'completed' | 'archived'
+          lifecycle?: 'idea' | 'designing' | 'building' | 'testing' | 'shipped' | 'paused'
           health?: 'on-track' | 'at-risk' | 'blocked'
           is_focus?: boolean
           progress?: number
           deadline?: string | null
+          last_task?: string | null
+          current_task?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -242,6 +251,7 @@ export interface Database {
     }
     Enums: {
       project_status: 'active' | 'completed' | 'archived'
+      project_lifecycle: 'idea' | 'designing' | 'building' | 'testing' | 'shipped' | 'paused'
       project_health: 'on-track' | 'at-risk' | 'blocked'
     }
   }
