@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactFlow, {
   Background,
   MiniMap,
@@ -12,6 +12,8 @@ import ReactFlow, {
   NodeTypes,
   BackgroundVariant,
   OnNodesChange,
+  ConnectionLineType,
+  MarkerType,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { CustomNode } from "./custom-node";
@@ -21,6 +23,13 @@ import { useIdeaStore, mockNodes, mockLinks } from "@/store/idea-store";
 const nodeTypes: NodeTypes = {
   custom: CustomNode,
 };
+
+// Custom edge style for Obsidian-like appearance
+const getEdgeStyle = (sourceColor: string, isHighlighted: boolean) => ({
+  stroke: isHighlighted ? sourceColor : `${sourceColor}60`,
+  strokeWidth: isHighlighted ? 2.5 : 1.5,
+  transition: "stroke 0.3s ease, stroke-width 0.3s ease",
+});
 
 export function Canvas() {
   const {
@@ -35,6 +44,17 @@ export function Canvas() {
     selectNode,
     selectedNodeId,
   } = useIdeaStore();
+
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+
+  // Get node color map
+  const nodeColorMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    storeNodes.forEach((node) => {
+      map[node.id] = node.color;
+    });
+    return map;
+  }, [storeNodes]);
 
   // Convert store data to React Flow format
   const initialNodes: Node[] = useMemo(
@@ -55,14 +75,27 @@ export function Canvas() {
 
   const initialEdges: Edge[] = useMemo(
     () =>
-      storeLinks.map((link) => ({
-        id: link.id,
-        source: link.source_id,
-        target: link.target_id,
-        style: { stroke: "#3a3a4c", strokeWidth: 2 },
-        animated: false,
-      })),
-    [storeLinks]
+      storeLinks.map((link) => {
+        const activeId = hoveredNodeId || selectedNodeId;
+        const isHighlighted = activeId === link.source_id || activeId === link.target_id;
+        const sourceColor = nodeColorMap[link.source_id] || "#00d4ff";
+
+        return {
+          id: link.id,
+          source: link.source_id,
+          target: link.target_id,
+          type: "default",
+          style: getEdgeStyle(sourceColor, isHighlighted),
+          animated: isHighlighted,
+          markerEnd: {
+            type: MarkerType.Arrow,
+            width: 15,
+            height: 15,
+            color: isHighlighted ? sourceColor : `${sourceColor}60`,
+          },
+        };
+      }),
+    [storeLinks, hoveredNodeId, selectedNodeId, nodeColorMap]
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -156,7 +189,17 @@ export function Canvas() {
   // Deselect on pane click
   const onPaneClick = useCallback(() => {
     selectNode(null);
+    setHoveredNodeId(null);
   }, [selectNode]);
+
+  // Handle node mouse enter/leave for edge highlighting
+  const onNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
+    setHoveredNodeId(node.id);
+  }, []);
+
+  const onNodeMouseLeave = useCallback(() => {
+    setHoveredNodeId(null);
+  }, []);
 
   return (
     <div className="w-full h-full relative">
@@ -168,32 +211,47 @@ export function Canvas() {
         onConnect={onConnect}
         onPaneClick={onPaneClick}
         onPaneContextMenu={onPaneDoubleClick}
+        onNodeMouseEnter={onNodeMouseEnter}
+        onNodeMouseLeave={onNodeMouseLeave}
         nodeTypes={nodeTypes}
+        connectionLineType={ConnectionLineType.SmoothStep}
+        connectionLineStyle={{ stroke: "#00d4ff", strokeWidth: 2 }}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.2}
-        maxZoom={2}
+        fitViewOptions={{ padding: 0.3 }}
+        minZoom={0.1}
+        maxZoom={3}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         proOptions={{ hideAttribution: true }}
         className="bg-background"
+        style={{
+          background: "radial-gradient(circle at 50% 50%, #1a1a2e 0%, #0a0a0f 100%)"
+        }}
       >
         <Background
           variant={BackgroundVariant.Dots}
-          gap={20}
+          gap={30}
           size={1}
-          color="#2a2a3c"
+          color="#2a2a3c40"
         />
         <Toolbar />
         <MiniMap
           nodeColor={(node) => node.data?.color || "#00d4ff"}
-          maskColor="rgba(10, 10, 15, 0.8)"
+          nodeStrokeColor={(node) => node.data?.color || "#00d4ff"}
+          nodeStrokeWidth={2}
+          maskColor="rgba(10, 10, 15, 0.9)"
           style={{
-            backgroundColor: "#12121a",
+            backgroundColor: "#0a0a0f",
             border: "1px solid #2a2a3c",
+            borderRadius: "8px",
           }}
           className="!bottom-4 !right-4"
         />
       </ReactFlow>
+
+      {/* Graph stats overlay */}
+      <div className="absolute bottom-4 left-4 px-3 py-2 bg-background-secondary/80 backdrop-blur-sm rounded-lg border border-border text-xs text-text-muted">
+        <span className="text-cyan">{storeNodes.length}</span> nodes · <span className="text-purple">{storeLinks.length}</span> connections
+      </div>
     </div>
   );
 }
