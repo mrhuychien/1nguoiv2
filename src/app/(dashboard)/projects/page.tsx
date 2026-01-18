@@ -5,7 +5,9 @@ import { Navbar } from "@/components/dashboard/navbar";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useProjectStore, mockProjects, mockTasks } from "@/store/project-store";
+import { ProjectModal } from "@/components/projects/project-modal";
 import { Project } from "@/types/database.types";
+import { generateId } from "@/lib/utils";
 import {
   Plus,
   MoreHorizontal,
@@ -19,6 +21,10 @@ import {
   Calendar,
   CheckCircle2,
   Zap,
+  Pencil,
+  Trash2,
+  Play,
+  ArrowRight,
 } from "lucide-react";
 
 type LifecycleFilter = "all" | "idea" | "designing" | "building" | "testing" | "shipped" | "paused";
@@ -32,6 +38,7 @@ const lifecycleConfig = {
     bg: "bg-yellow-500/10",
     border: "border-yellow-500/20",
     progress: "bg-yellow-500",
+    next: "designing" as const,
   },
   designing: {
     label: "DESIGNING",
@@ -41,6 +48,7 @@ const lifecycleConfig = {
     bg: "bg-blue-500/10",
     border: "border-blue-500/20",
     progress: "bg-blue-500",
+    next: "building" as const,
   },
   building: {
     label: "BUILDING",
@@ -50,6 +58,7 @@ const lifecycleConfig = {
     bg: "bg-orange-500/10",
     border: "border-orange-500/20",
     progress: "bg-orange-500",
+    next: "testing" as const,
   },
   testing: {
     label: "TESTING",
@@ -59,6 +68,7 @@ const lifecycleConfig = {
     bg: "bg-purple-500/10",
     border: "border-purple-500/20",
     progress: "bg-purple-500",
+    next: "shipped" as const,
   },
   shipped: {
     label: "SHIPPED",
@@ -68,6 +78,7 @@ const lifecycleConfig = {
     bg: "bg-green-500/10",
     border: "border-green-500/20",
     progress: "bg-green-500",
+    next: null,
   },
   paused: {
     label: "PAUSED",
@@ -77,6 +88,7 @@ const lifecycleConfig = {
     bg: "bg-slate-500/10",
     border: "border-slate-500/20",
     progress: "bg-slate-500",
+    next: null,
   },
 };
 
@@ -93,7 +105,101 @@ function formatRelativeTime(dateString: string): string {
   return `${Math.floor(diffDays / 7)} tuần trước`;
 }
 
-function ActiveProjectCard({ project }: { project: Project }) {
+interface ProjectMenuProps {
+  project: Project;
+  onEdit: () => void;
+  onDelete: () => void;
+  onMoveNext: () => void;
+  onPause: () => void;
+  onResume: () => void;
+}
+
+function ProjectMenu({ project, onEdit, onDelete, onMoveNext, onPause, onResume }: ProjectMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const config = lifecycleConfig[project.lifecycle];
+
+  return (
+    <div className="relative">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 text-text-muted hover:text-text-primary"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <MoreHorizontal className="h-4 w-4" />
+      </Button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 w-48 bg-background-secondary border border-border rounded-xl shadow-xl z-50 py-1 overflow-hidden">
+            <button
+              onClick={() => { onEdit(); setIsOpen(false); }}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-background-tertiary flex items-center gap-2"
+            >
+              <Pencil className="h-4 w-4" />
+              Chỉnh sửa
+            </button>
+
+            {config.next && project.lifecycle !== "paused" && (
+              <button
+                onClick={() => { onMoveNext(); setIsOpen(false); }}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-background-tertiary flex items-center gap-2 text-cyan"
+              >
+                <ArrowRight className="h-4 w-4" />
+                Chuyển sang {lifecycleConfig[config.next].label}
+              </button>
+            )}
+
+            {project.lifecycle !== "paused" && project.lifecycle !== "shipped" && (
+              <button
+                onClick={() => { onPause(); setIsOpen(false); }}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-background-tertiary flex items-center gap-2 text-slate-500"
+              >
+                <PauseCircle className="h-4 w-4" />
+                Tạm dừng
+              </button>
+            )}
+
+            {project.lifecycle === "paused" && (
+              <button
+                onClick={() => { onResume(); setIsOpen(false); }}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-background-tertiary flex items-center gap-2 text-green-500"
+              >
+                <Play className="h-4 w-4" />
+                Tiếp tục
+              </button>
+            )}
+
+            <hr className="my-1 border-border" />
+
+            <button
+              onClick={() => { onDelete(); setIsOpen(false); }}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-red-500/10 flex items-center gap-2 text-red-500"
+            >
+              <Trash2 className="h-4 w-4" />
+              Xóa dự án
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ActiveProjectCard({
+  project,
+  onEdit,
+  onDelete,
+  onMoveNext,
+  onPause,
+}: {
+  project: Project;
+  onEdit: () => void;
+  onDelete: () => void;
+  onMoveNext: () => void;
+  onPause: () => void;
+}) {
   const config = lifecycleConfig[project.lifecycle];
   const Icon = config.icon;
 
@@ -117,9 +223,14 @@ function ActiveProjectCard({ project }: { project: Project }) {
             </div>
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-text-muted hover:text-text-primary">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
+        <ProjectMenu
+          project={project}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onMoveNext={onMoveNext}
+          onPause={onPause}
+          onResume={() => {}}
+        />
       </div>
 
       {/* Tasks */}
@@ -164,13 +275,18 @@ function ActiveProjectCard({ project }: { project: Project }) {
 
       {/* Footer */}
       <div className="flex items-center justify-between mt-auto pt-4 border-t border-border">
-        {project.deadline && (
+        {project.deadline ? (
           <div className="flex items-center gap-2 text-xs text-text-muted">
             <Calendar className="h-4 w-4" />
             <span>Deadline: {new Date(project.deadline).toLocaleDateString("vi-VN")}</span>
           </div>
+        ) : (
+          <div />
         )}
-        <button className="text-xs font-semibold text-cyan hover:underline underline-offset-4">
+        <button
+          onClick={onEdit}
+          className="text-xs font-semibold text-cyan hover:underline underline-offset-4"
+        >
           Xem chi tiết
         </button>
       </div>
@@ -178,15 +294,65 @@ function ActiveProjectCard({ project }: { project: Project }) {
   );
 }
 
-function IdeaCard({ project }: { project: Project }) {
+function IdeaCard({
+  project,
+  onEdit,
+  onDelete,
+  onMoveNext,
+}: {
+  project: Project;
+  onEdit: () => void;
+  onDelete: () => void;
+  onMoveNext: () => void;
+}) {
+  const [showMenu, setShowMenu] = useState(false);
+
   return (
-    <Card className="p-4 hover:border-yellow-500 transition-all group cursor-pointer">
-      <div className="flex items-center gap-3 mb-3">
-        <Lightbulb className="h-5 w-5 text-yellow-500" />
-        <h4 className="font-semibold text-sm truncate">{project.title}</h4>
+    <Card className="p-4 hover:border-yellow-500 transition-all group cursor-pointer relative">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <Lightbulb className="h-5 w-5 text-yellow-500" />
+          <h4 className="font-semibold text-sm truncate">{project.title}</h4>
+        </div>
+        <div className="relative">
+          <button
+            onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity text-text-muted hover:text-text-primary"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+              <div className="absolute right-0 top-full mt-1 w-40 bg-background-secondary border border-border rounded-lg shadow-xl z-50 py-1">
+                <button
+                  onClick={() => { onEdit(); setShowMenu(false); }}
+                  className="w-full px-3 py-1.5 text-left text-xs hover:bg-background-tertiary flex items-center gap-2"
+                >
+                  <Pencil className="h-3 w-3" />
+                  Chỉnh sửa
+                </button>
+                <button
+                  onClick={() => { onMoveNext(); setShowMenu(false); }}
+                  className="w-full px-3 py-1.5 text-left text-xs hover:bg-background-tertiary flex items-center gap-2 text-blue-500"
+                >
+                  <ArrowRight className="h-3 w-3" />
+                  Bắt đầu thiết kế
+                </button>
+                <button
+                  onClick={() => { onDelete(); setShowMenu(false); }}
+                  className="w-full px-3 py-1.5 text-left text-xs hover:bg-red-500/10 flex items-center gap-2 text-red-500"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Xóa
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
-      <p className="text-xs text-text-muted line-clamp-2 mb-3">
-        {project.description}
+      <p className="text-xs text-text-muted line-clamp-2 mb-3" onClick={onEdit}>
+        {project.description || "Chưa có mô tả"}
       </p>
       <div className="flex items-center justify-between pt-3 border-t border-border/50">
         <span className="text-[10px] font-bold text-yellow-500">💡 IDEA</span>
@@ -198,10 +364,20 @@ function IdeaCard({ project }: { project: Project }) {
   );
 }
 
-function ShippedCard({ project }: { project: Project }) {
+function ShippedCard({
+  project,
+  onEdit,
+  onDelete,
+}: {
+  project: Project;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [showMenu, setShowMenu] = useState(false);
+
   return (
-    <Card className="p-5 flex items-center justify-between">
-      <div className="flex items-center gap-4">
+    <Card className="p-5 flex items-center justify-between group">
+      <div className="flex items-center gap-4" onClick={onEdit}>
         <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-500">
           <Rocket className="h-5 w-5" />
         </div>
@@ -212,17 +388,53 @@ function ShippedCard({ project }: { project: Project }) {
           </p>
         </div>
       </div>
-      <span className="px-2 py-1 bg-green-500/10 text-green-500 text-[9px] font-bold rounded uppercase">
-        🚀 SHIPPED
-      </span>
+      <div className="flex items-center gap-2">
+        <span className="px-2 py-1 bg-green-500/10 text-green-500 text-[9px] font-bold rounded uppercase">
+          🚀 SHIPPED
+        </span>
+        <div className="relative">
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="opacity-0 group-hover:opacity-100 transition-opacity text-text-muted hover:text-text-primary"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+              <div className="absolute right-0 top-full mt-1 w-32 bg-background-secondary border border-border rounded-lg shadow-xl z-50 py-1">
+                <button
+                  onClick={() => { onDelete(); setShowMenu(false); }}
+                  className="w-full px-3 py-1.5 text-left text-xs hover:bg-red-500/10 flex items-center gap-2 text-red-500"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Xóa
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }
 
-function PausedCard({ project }: { project: Project }) {
+function PausedCard({
+  project,
+  onEdit,
+  onDelete,
+  onResume,
+}: {
+  project: Project;
+  onEdit: () => void;
+  onDelete: () => void;
+  onResume: () => void;
+}) {
+  const [showMenu, setShowMenu] = useState(false);
+
   return (
-    <Card className="p-5 flex items-center justify-between opacity-70">
-      <div className="flex items-center gap-4">
+    <Card className="p-5 flex items-center justify-between opacity-70 group hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-4" onClick={onEdit}>
         <div className="w-10 h-10 rounded-lg bg-slate-500/10 flex items-center justify-center text-slate-500">
           <PauseCircle className="h-5 w-5" />
         </div>
@@ -233,16 +445,50 @@ function PausedCard({ project }: { project: Project }) {
           </p>
         </div>
       </div>
-      <span className="px-2 py-1 bg-slate-500/10 text-slate-500 text-[9px] font-bold rounded uppercase">
-        ⏸️ PAUSED
-      </span>
+      <div className="flex items-center gap-2">
+        <span className="px-2 py-1 bg-slate-500/10 text-slate-500 text-[9px] font-bold rounded uppercase">
+          ⏸️ PAUSED
+        </span>
+        <div className="relative">
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="opacity-0 group-hover:opacity-100 transition-opacity text-text-muted hover:text-text-primary"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+          {showMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+              <div className="absolute right-0 top-full mt-1 w-36 bg-background-secondary border border-border rounded-lg shadow-xl z-50 py-1">
+                <button
+                  onClick={() => { onResume(); setShowMenu(false); }}
+                  className="w-full px-3 py-1.5 text-left text-xs hover:bg-background-tertiary flex items-center gap-2 text-green-500"
+                >
+                  <Play className="h-3 w-3" />
+                  Tiếp tục
+                </button>
+                <button
+                  onClick={() => { onDelete(); setShowMenu(false); }}
+                  className="w-full px-3 py-1.5 text-left text-xs hover:bg-red-500/10 flex items-center gap-2 text-red-500"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Xóa
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }
 
 export default function ProjectsPage() {
-  const { projects, setProjects, setTasks } = useProjectStore();
+  const { projects, setProjects, setTasks, addProject, updateProject, deleteProject } = useProjectStore();
   const [filter, setFilter] = useState<LifecycleFilter>("all");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [modalMode, setModalMode] = useState<"create" | "edit">("create");
 
   useEffect(() => {
     if (projects.length === 0) {
@@ -250,6 +496,81 @@ export default function ProjectsPage() {
       setTasks(mockTasks);
     }
   }, [projects.length, setProjects, setTasks]);
+
+  // Handlers
+  const handleCreateProject = () => {
+    setEditingProject(null);
+    setModalMode("create");
+    setIsModalOpen(true);
+  };
+
+  const handleEditProject = (project: Project) => {
+    setEditingProject(project);
+    setModalMode("edit");
+    setIsModalOpen(true);
+  };
+
+  const handleSaveProject = (data: Partial<Project>) => {
+    if (modalMode === "create") {
+      const newProject: Project = {
+        id: generateId(),
+        user_id: "user-1",
+        title: data.title || "Untitled",
+        description: data.description || null,
+        status: data.status || "active",
+        lifecycle: data.lifecycle || "idea",
+        health: "on-track",
+        is_focus: false,
+        progress: data.progress || 0,
+        deadline: data.deadline || null,
+        last_task: null,
+        current_task: data.current_task || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      addProject(newProject);
+    } else if (editingProject) {
+      updateProject(editingProject.id, {
+        ...data,
+        updated_at: new Date().toISOString(),
+      });
+    }
+  };
+
+  const handleDeleteProject = (id: string) => {
+    if (confirm("Bạn có chắc muốn xóa dự án này?")) {
+      deleteProject(id);
+    }
+  };
+
+  const handleMoveToNextStage = (project: Project) => {
+    const config = lifecycleConfig[project.lifecycle];
+    if (config.next) {
+      updateProject(project.id, {
+        lifecycle: config.next,
+        status: config.next === "shipped" ? "completed" : "active",
+        last_task: project.current_task,
+        current_task: null,
+        updated_at: new Date().toISOString(),
+      });
+    }
+  };
+
+  const handlePauseProject = (project: Project) => {
+    updateProject(project.id, {
+      lifecycle: "paused",
+      status: "archived",
+      updated_at: new Date().toISOString(),
+    });
+  };
+
+  const handleResumeProject = (project: Project) => {
+    updateProject(project.id, {
+      lifecycle: "building", // Resume to building by default
+      status: "active",
+      updated_at: new Date().toISOString(),
+    });
+  };
 
   // Filter projects by lifecycle
   const activeProjects = projects.filter(
@@ -291,7 +612,7 @@ export default function ProjectsPage() {
               Theo dõi tiến trình từ ý tưởng đến khi ra mắt
             </p>
           </div>
-          <Button className="shadow-lg shadow-cyan/20">
+          <Button className="shadow-lg shadow-cyan/20" onClick={handleCreateProject}>
             <Plus className="h-4 w-4 mr-2" />
             Thêm mới
           </Button>
@@ -332,7 +653,14 @@ export default function ProjectsPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {activeProjects.map((project) => (
-                <ActiveProjectCard key={project.id} project={project} />
+                <ActiveProjectCard
+                  key={project.id}
+                  project={project}
+                  onEdit={() => handleEditProject(project)}
+                  onDelete={() => handleDeleteProject(project.id)}
+                  onMoveNext={() => handleMoveToNextStage(project)}
+                  onPause={() => handlePauseProject(project)}
+                />
               ))}
             </div>
           </section>
@@ -355,7 +683,13 @@ export default function ProjectsPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {ideaProjects.slice(0, 4).map((project) => (
-                <IdeaCard key={project.id} project={project} />
+                <IdeaCard
+                  key={project.id}
+                  project={project}
+                  onEdit={() => handleEditProject(project)}
+                  onDelete={() => handleDeleteProject(project.id)}
+                  onMoveNext={() => handleMoveToNextStage(project)}
+                />
               ))}
             </div>
           </section>
@@ -373,7 +707,12 @@ export default function ProjectsPage() {
                 </div>
                 <div className="space-y-4">
                   {shippedProjects.map((project) => (
-                    <ShippedCard key={project.id} project={project} />
+                    <ShippedCard
+                      key={project.id}
+                      project={project}
+                      onEdit={() => handleEditProject(project)}
+                      onDelete={() => handleDeleteProject(project.id)}
+                    />
                   ))}
                 </div>
               </div>
@@ -388,7 +727,13 @@ export default function ProjectsPage() {
                 </div>
                 <div className="space-y-4">
                   {pausedProjects.map((project) => (
-                    <PausedCard key={project.id} project={project} />
+                    <PausedCard
+                      key={project.id}
+                      project={project}
+                      onEdit={() => handleEditProject(project)}
+                      onDelete={() => handleDeleteProject(project.id)}
+                      onResume={() => handleResumeProject(project)}
+                    />
                   ))}
                 </div>
               </div>
@@ -408,13 +753,22 @@ export default function ProjectsPage() {
             <p className="text-text-secondary mb-4">
               Tạo dự án đầu tiên để bắt đầu
             </p>
-            <Button>
+            <Button onClick={handleCreateProject}>
               <Plus className="h-4 w-4 mr-2" />
               Tạo dự án mới
             </Button>
           </div>
         )}
       </div>
+
+      {/* Project Modal */}
+      <ProjectModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveProject}
+        project={editingProject}
+        mode={modalMode}
+      />
     </>
   );
 }
