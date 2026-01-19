@@ -63,12 +63,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   // Fetch both projects and tasks in parallel for faster loading
   fetchAll: async (userId: string) => {
-    console.log("[Store Debug] fetchAll called for user:", userId);
     set({ isLoading: true, error: null });
     try {
       const supabase = createClient();
 
-      console.log("[Store Debug] Starting parallel fetch...");
       // Fetch both in parallel
       const [projectsResult, tasksResult] = await Promise.all([
         supabase
@@ -83,24 +81,18 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           .order("created_at", { ascending: false })
       ]);
 
-      console.log("[Store Debug] Fetch results:", {
-        projectsCount: projectsResult.data?.length,
-        projectsError: projectsResult.error,
-        tasksCount: tasksResult.data?.length,
-        tasksError: tasksResult.error
-      });
-
       if (projectsResult.error) throw projectsResult.error;
       if (tasksResult.error) throw tasksResult.error;
+
+      console.log("[Data] Loaded", projectsResult.data?.length || 0, "projects,", tasksResult.data?.length || 0, "tasks");
 
       set({
         projects: projectsResult.data || [],
         tasks: tasksResult.data || [],
         isInitialized: true
       });
-      console.log("[Store Debug] Data set successfully");
     } catch (error) {
-      console.error("[Store Debug] Error fetching data:", error);
+      console.error("[Data] Error fetching:", error);
       set({ error: (error as Error).message });
     } finally {
       set({ isLoading: false });

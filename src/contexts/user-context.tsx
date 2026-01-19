@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
-import { User } from "@supabase/supabase-js";
+import { User, Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { Profile } from "@/types/database.types";
 
@@ -28,8 +28,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [error] = useState<Error | null>(null);
 
   // Computed user info that combines profile and auth metadata
   const getUserInfo = useCallback((authUser: User | null, userProfile: Profile | null): UserInfo | null => {
@@ -45,130 +44,90 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
-    if (isInitialized) return;
+  // Fetch profile for a user
+  const fetchProfile = useCallback(async (userId: string) => {
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { data, error: profileError } = await supabaseAny
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
 
-    let isMounted = true;
-    let timeoutId: NodeJS.Timeout | null = null;
-    const supabase = createClient();
-
-    const getInitialSession = async () => {
-      console.log("[Auth Debug] Starting getInitialSession...");
-
-      // Add timeout to prevent hanging
-      timeoutId = setTimeout(() => {
-        if (isMounted) {
-          console.warn("[Auth Debug] Auth check timeout - proceeding without user");
-          setIsLoading(false);
-          setIsInitialized(true);
-        }
-      }, 5000); // 5 second timeout
-
-      try {
-        console.log("[Auth Debug] Calling getSession...");
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log("[Auth Debug] getSession result:", { hasSession: !!session, hasUser: !!session?.user, error: sessionError });
-
-        if (timeoutId) clearTimeout(timeoutId);
-        if (!isMounted) return;
-
-        if (sessionError) {
-          console.error("[Auth Debug] Session error:", sessionError);
-          setIsLoading(false);
-          setIsInitialized(true);
-          return;
-        }
-
-        if (!session?.user) {
-          console.log("[Auth Debug] No session user, setting initialized");
-          setIsLoading(false);
-          setIsInitialized(true);
-          return;
-        }
-
-        // Set user immediately from session
-        console.log("[Auth Debug] Setting user:", session.user.id, session.user.email);
-        setUser(session.user);
-        // Mark as initialized early so UI can render
-        setIsLoading(false);
-        setIsInitialized(true);
-
-        // Fetch profile in background (non-blocking)
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const supabaseAny = supabase as any;
-          const { data: profileData, error: profileError } = await supabaseAny
-            .from("profiles")
-            .select("*")
-            .eq("id", session.user.id)
-            .single();
-
-          if (profileError) {
-            console.warn("Profile fetch warning:", profileError.message);
-          } else if (isMounted && profileData) {
-            setProfile(profileData);
-          }
-        } catch (profileErr) {
-          console.warn("Profile fetch failed:", profileErr);
-        }
-
-        // Validate user in background
-        supabase.auth.getUser().catch(() => {});
-      } catch (err) {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (!isMounted) return;
-        if (err instanceof Error && (err.name === 'AbortError' || err.message?.includes('aborted'))) {
-          // Ignore abort errors
-        } else {
-          console.error("Session error:", err);
-          setError(err instanceof Error ? err : new Error('Unknown error'));
-        }
-        setIsLoading(false);
-        setIsInitialized(true);
+      if (profileError) {
+        console.warn("Profile fetch warning:", profileError.message);
+      } else if (data) {
+        setProfile(data);
       }
-    };
+    } catch (err) {
+      console.warn("Profile fetch failed:", err);
+    }
+  }, []);
 
-    getInitialSession();
+  // Handle session change
+  const handleSession = useCallback((session: Session | null) => {
+    console.log("[Auth] Session changed:", session?.user?.email || "no user");
 
-    // Listen for auth changes
+    if (session?.user) {
+      setUser(session.user);
+      setIsLoading(false);
+      // Fetch profile in background
+      fetchProfile(session.user.id);
+    } else {
+      setUser(null);
+      setProfile(null);
+      setIsLoading(false);
+    }
+  }, [fetchProfile]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    let isMounted = true;
+    let hasReceivedEvent = false;
+
+    console.log("[Auth] Setting up auth listener...");
+
+    // Listen for auth state changes - this is the primary source of truth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (!isMounted) return;
 
-        if (event === 'SIGNED_OUT') {
+        console.log("[Auth] Auth state changed:", event);
+        hasReceivedEvent = true;
+
+        if (event === 'INITIAL_SESSION') {
+          // This fires immediately with the current session from cookies
+          handleSession(session);
+        } else if (event === 'SIGNED_IN') {
+          handleSession(session);
+        } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setProfile(null);
-          return;
-        }
-
-        if (event === 'SIGNED_IN' && session?.user) {
-          setUser(session.user);
-
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const supabaseAny = supabase as any;
-            const { data: profileData } = await supabaseAny
-              .from("profiles")
-              .select("*")
-              .eq("id", session.user.id)
-              .single();
-
-            if (isMounted && profileData) {
-              setProfile(profileData);
-            }
-          } catch (err) {
-            console.error("Profile fetch on sign in:", err);
+          setIsLoading(false);
+        } else if (event === 'TOKEN_REFRESHED') {
+          if (session?.user) {
+            setUser(session.user);
           }
         }
       }
     );
 
+    // Fallback timeout - if INITIAL_SESSION doesn't fire within 3 seconds
+    const timeoutId = setTimeout(() => {
+      if (isMounted && !hasReceivedEvent) {
+        console.warn("[Auth] Fallback timeout - no auth event received");
+        setIsLoading(false);
+      }
+    }, 3000);
+
     return () => {
       isMounted = false;
-      if (timeoutId) clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
-  }, [isInitialized]);
+  }, [handleSession]);
 
   const signOut = useCallback(async () => {
     try {
