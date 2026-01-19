@@ -25,8 +25,6 @@ export function Canvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<D3Node, D3Link> | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [connectMode, setConnectMode] = useState(false);
-  const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const {
@@ -43,6 +41,11 @@ export function Canvas() {
     searchResults,
     setSearchQuery,
     clearSearch,
+    connectMode,
+    connectSourceId,
+    startConnectMode,
+    cancelConnectMode,
+    completeConnection,
   } = useIdeaStore();
 
   // Load mock data on mount
@@ -199,9 +202,7 @@ export function Canvas() {
 
         // If in connect mode and we have a source, create the link
         if (connectMode && connectSourceId && connectSourceId !== d.id) {
-          addLink(connectSourceId, d.id);
-          setConnectSourceId(null);
-          setConnectMode(false);
+          completeConnection(d.id);
         } else if (event.shiftKey && selectedNodeId && selectedNodeId !== d.id) {
           // Shift+click to connect selected node to this node
           addLink(selectedNodeId, d.id);
@@ -259,8 +260,7 @@ export function Canvas() {
     // Click on background to deselect
     svg.on("click", () => {
       selectNode(null);
-      setConnectMode(false);
-      setConnectSourceId(null);
+      cancelConnectMode();
     });
 
     // Double click to add new node
@@ -312,7 +312,7 @@ export function Canvas() {
     return () => {
       simulation.stop();
     };
-  }, [storeNodes, storeLinks, selectedNodeId, addNode, addLink, selectNode, connectMode, connectSourceId, searchResults]);
+  }, [storeNodes, storeLinks, selectedNodeId, addNode, addLink, selectNode, connectMode, connectSourceId, searchResults, completeConnection, cancelConnectMode]);
 
   // Reheat simulation
   const reheat = useCallback(() => {
@@ -321,13 +321,12 @@ export function Canvas() {
     }
   }, []);
 
-  // Start connect mode
-  const startConnectMode = useCallback(() => {
+  // Start connect mode (uses store)
+  const handleStartConnectMode = useCallback(() => {
     if (selectedNodeId) {
-      setConnectMode(true);
-      setConnectSourceId(selectedNodeId);
+      startConnectMode(selectedNodeId);
     }
-  }, [selectedNodeId]);
+  }, [selectedNodeId, startConnectMode]);
 
   // Toggle search
   const toggleSearch = useCallback(() => {
@@ -375,14 +374,13 @@ export function Canvas() {
             clearSearch();
           } else {
             selectNode(null);
-            setConnectMode(false);
-            setConnectSourceId(null);
+            cancelConnectMode();
           }
           break;
         case "c":
           // Press C to enter connect mode
           if (selectedNodeId) {
-            startConnectMode();
+            handleStartConnectMode();
           }
           break;
       }
@@ -390,7 +388,7 @@ export function Canvas() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [reheat, selectedNodeId, deleteNode, selectNode, startConnectMode, isSearchOpen, clearSearch, toggleSearch]);
+  }, [reheat, selectedNodeId, deleteNode, selectNode, handleStartConnectMode, cancelConnectMode, isSearchOpen, clearSearch, toggleSearch]);
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-[#0a0a0f]">
@@ -464,7 +462,7 @@ export function Canvas() {
           <>
             <div className="h-px bg-white/10 mx-1" />
             <button
-              onClick={startConnectMode}
+              onClick={handleStartConnectMode}
               className={`h-8 w-8 flex items-center justify-center rounded transition-colors ${
                 connectMode
                   ? "text-cyan-400 bg-cyan-500/20"

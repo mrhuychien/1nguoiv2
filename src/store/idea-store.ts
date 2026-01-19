@@ -27,6 +27,8 @@ interface IdeaState {
   error: string | null;
   searchQuery: string;
   searchResults: string[];
+  connectMode: boolean;
+  connectSourceId: string | null;
 }
 
 interface IdeaActions {
@@ -44,6 +46,11 @@ interface IdeaActions {
   // Link actions
   addLink: (sourceId: string, targetId: string) => void;
   deleteLink: (id: string) => void;
+
+  // Connect mode actions
+  startConnectMode: (sourceId: string) => void;
+  cancelConnectMode: () => void;
+  completeConnection: (targetId: string) => void;
 
   // State
   setLoading: (loading: boolean) => void;
@@ -71,6 +78,8 @@ const initialState: IdeaState = {
   error: null,
   searchQuery: "",
   searchResults: [],
+  connectMode: false,
+  connectSourceId: null,
 };
 
 export const useIdeaStore = create<IdeaStore>((set, get) => ({
@@ -160,6 +169,50 @@ export const useIdeaStore = create<IdeaStore>((set, get) => ({
   deleteLink: (id) => {
     set((state) => ({
       links: state.links.filter((link) => link.id !== id),
+    }));
+  },
+
+  startConnectMode: (sourceId) => {
+    set({ connectMode: true, connectSourceId: sourceId });
+  },
+
+  cancelConnectMode: () => {
+    set({ connectMode: false, connectSourceId: null });
+  },
+
+  completeConnection: (targetId) => {
+    const { connectSourceId, links, graphId } = get();
+
+    if (!connectSourceId || connectSourceId === targetId) {
+      set({ connectMode: false, connectSourceId: null });
+      return;
+    }
+
+    // Check for existing link
+    const existingLink = links.find(
+      (link) =>
+        (link.source_id === connectSourceId && link.target_id === targetId) ||
+        (link.source_id === targetId && link.target_id === connectSourceId)
+    );
+
+    if (existingLink) {
+      set({ connectMode: false, connectSourceId: null });
+      return;
+    }
+
+    const newLink: IdeaLink = {
+      id: generateId(),
+      graph_id: graphId || "default",
+      user_id: "user-1",
+      source_id: connectSourceId,
+      target_id: targetId,
+      created_at: new Date().toISOString(),
+    };
+
+    set((state) => ({
+      links: [...state.links, newLink],
+      connectMode: false,
+      connectSourceId: null,
     }));
   },
 
