@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -32,7 +32,7 @@ import { Input } from "@/components/ui/input";
 import { useProjectStore } from "@/store/project-store";
 import { useProjectData } from "@/hooks/use-project-data";
 import { cn } from "@/lib/utils";
-import { Project, Task } from "@/types/database.types";
+import { Task } from "@/types/database.types";
 
 const lifecycleConfig = {
   idea: {
