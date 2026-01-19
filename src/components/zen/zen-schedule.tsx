@@ -49,13 +49,10 @@ const ZONE_CONFIG: Record<
 
 export function ZenSchedule({ className }: ZenScheduleProps) {
   const { currentZone, setCurrentZone } = useZenStore();
-  const [isMounted, setIsMounted] = useState(false);
   const [timeString, setTimeString] = useState("--:--");
 
   // Update current time every minute
   useEffect(() => {
-    setIsMounted(true);
-
     const updateTime = () => {
       const now = new Date();
       const hours = now.getHours().toString().padStart(2, "0");
