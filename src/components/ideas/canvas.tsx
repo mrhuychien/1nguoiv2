@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import * as d3 from "d3";
 import { useIdeaStore, mockNodes, mockLinks } from "@/store/idea-store";
 
@@ -23,6 +23,8 @@ export function Canvas() {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<D3Node, D3Link> | null>(null);
+  const [connectMode, setConnectMode] = useState(false);
+  const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
 
   const {
     nodes: storeNodes,
@@ -30,6 +32,7 @@ export function Canvas() {
     setNodes: setStoreNodes,
     setLinks: setStoreLinks,
     addNode,
+    addLink,
     deleteNode,
     selectNode,
     selectedNodeId,
@@ -186,8 +189,24 @@ export function Canvas() {
       })
       .on("click", (event, d) => {
         event.stopPropagation();
-        selectNode(d.id);
+
+        // If in connect mode and we have a source, create the link
+        if (connectMode && connectSourceId && connectSourceId !== d.id) {
+          addLink(connectSourceId, d.id);
+          setConnectSourceId(null);
+          setConnectMode(false);
+        } else if (event.shiftKey && selectedNodeId && selectedNodeId !== d.id) {
+          // Shift+click to connect selected node to this node
+          addLink(selectedNodeId, d.id);
+        } else {
+          selectNode(d.id);
+        }
       });
+
+    // Highlight selected node
+    node.select(".node-circle")
+      .attr("stroke", (d) => d.id === selectedNodeId ? "#fff" : "none")
+      .attr("stroke-width", (d) => d.id === selectedNodeId ? 2 : 0);
 
     // Node labels
     node.append("text")
@@ -206,6 +225,8 @@ export function Canvas() {
     // Click on background to deselect
     svg.on("click", () => {
       selectNode(null);
+      setConnectMode(false);
+      setConnectSourceId(null);
     });
 
     // Double click to add new node
@@ -257,7 +278,7 @@ export function Canvas() {
     return () => {
       simulation.stop();
     };
-  }, [storeNodes, storeLinks, selectedNodeId, addNode, selectNode]);
+  }, [storeNodes, storeLinks, selectedNodeId, addNode, addLink, selectNode, connectMode, connectSourceId]);
 
   // Reheat simulation
   const reheat = useCallback(() => {
@@ -265,6 +286,14 @@ export function Canvas() {
       simulationRef.current.alpha(0.5).restart();
     }
   }, []);
+
+  // Start connect mode
+  const startConnectMode = useCallback(() => {
+    if (selectedNodeId) {
+      setConnectMode(true);
+      setConnectSourceId(selectedNodeId);
+    }
+  }, [selectedNodeId]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -289,17 +318,32 @@ export function Canvas() {
           break;
         case "escape":
           selectNode(null);
+          setConnectMode(false);
+          setConnectSourceId(null);
+          break;
+        case "c":
+          // Press C to enter connect mode
+          if (selectedNodeId) {
+            startConnectMode();
+          }
           break;
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [reheat, selectedNodeId, deleteNode, selectNode]);
+  }, [reheat, selectedNodeId, deleteNode, selectNode, startConnectMode]);
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-[#0a0a0f]">
       <svg ref={svgRef} className="w-full h-full" />
+
+      {/* Connect mode indicator */}
+      {connectMode && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded-lg text-cyan-400 text-sm">
+          Chế độ kết nối: Click vào node khác để tạo liên kết
+        </div>
+      )}
 
       {/* Toolbar */}
       <div className="absolute top-4 right-4 flex flex-col gap-0.5 p-1.5 rounded-lg bg-black/50 backdrop-blur-sm border border-white/10">
@@ -317,6 +361,26 @@ export function Canvas() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
         </button>
+
+        {selectedNodeId && (
+          <>
+            <div className="h-px bg-white/10 mx-1" />
+            <button
+              onClick={startConnectMode}
+              className={`h-8 w-8 flex items-center justify-center rounded transition-colors ${
+                connectMode
+                  ? "text-cyan-400 bg-cyan-500/20"
+                  : "text-gray-400 hover:text-white hover:bg-white/10"
+              }`}
+              title="Kết nối với node khác (C hoặc Shift+Click)"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+            </button>
+          </>
+        )}
+
         <div className="h-px bg-white/10 mx-1" />
         <button
           onClick={reheat}
@@ -371,7 +435,7 @@ export function Canvas() {
 
       {/* Instructions */}
       <div className="absolute bottom-4 right-4 px-3 py-1.5 bg-black/60 backdrop-blur-sm rounded text-[10px] text-gray-600">
-        Drag: di chuyển · Scroll: zoom · Double-click: thêm node · Space: reheat
+        Drag: di chuyển · Scroll: zoom · Double-click: thêm · Shift+Click: kết nối · Space: reheat
       </div>
     </div>
   );
