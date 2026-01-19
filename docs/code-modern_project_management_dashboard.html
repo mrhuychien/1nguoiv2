@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Zen Dashboard with Audio Notifications</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#06b6d4",
+                        zen: "#a855f7",
+                        focus: "#22d3ee",
+                        amber_zen: "#fbbf24",
+                        "background-light": "#f8fafc",
+                        "background-dark": "#05070a",
+                        "card-light": "#ffffff",
+                        "card-dark": "#0f172a",
+                    },
+                    fontFamily: {
+                        display: ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.75rem",
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'flow-glow': 'flow-glow 3s ease-in-out infinite',
+                        'bell-ring': 'bell-ring 1.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) infinite',
+                        'ripple': 'ripple 2s linear infinite',
+                    },
+                    keyframes: {
+                        'flow-glow': {
+                            '0%, 100%': { opacity: 0.3, transform: 'scale(1)' },
+                            '50%': { opacity: 1, transform: 'scale(1.2)' },
+                        },
+                        'bell-ring': {
+                            '0%, 100%': { transform: 'rotate(0)' },
+                            '20%, 60%': { transform: 'rotate(15deg)' },
+                            '40%, 80%': { transform: 'rotate(-15deg)' },
+                        },
+                        'ripple': {
+                            '0%': { transform: 'scale(1)', opacity: '1' },
+                            '100%': { transform: 'scale(2.5)', opacity: '0' },
+                        }
+                    }
+                },
+            },
+        };
+    </script>
+<style type="text/tailwindcss">
+        @layer base {
+            body {
+                font-family: 'Inter', sans-serif;
+            }
+        }
+        .glass-effect {
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .deep-work-zone {
+            background: linear-gradient(145deg, rgba(6, 182, 212, 0.05) 0%, rgba(168, 85, 247, 0.05) 100%);
+        }
+        .active-glow {
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+        .garden-section {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        #focus-toggle-design:checked ~ .dim-overlay,
+        #focus-toggle-build:checked ~ .dim-overlay {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #focus-toggle-design:checked ~ main #design-card {
+            z-index: 50;
+            position: relative;
+            box-shadow: 0 0 50px rgba(34, 211, 238, 0.2);
+        }
+        #focus-toggle-build:checked ~ main #build-card {
+            z-index: 50;
+            position: relative;
+            box-shadow: 0 0 50px rgba(168, 85, 247, 0.2);
+        }
+        #focus-toggle-design:checked ~ main #design-card .timer-active,
+        #focus-toggle-build:checked ~ main #build-card .timer-active {
+            display: flex;
+        }
+        #focus-toggle-design:checked ~ main #design-card .timer-idle,
+        #focus-toggle-build:checked ~ main #build-card .timer-idle {
+            display: none;
+        }
+        .timer-ring {
+            stroke-dasharray: 283;
+            stroke-dashoffset: 70;
+            transition: stroke-dashoffset 1s linear;
+        }.zen-bell-ripple::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 9999px;
+            border: 1px solid currentColor;
+            animation: ripple 2s linear infinite;
+        }
+        .audio-slider {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        .audio-slider::-webkit-slider-runnable-track {
+            background: #334155;
+            height: 2px;
+            border-radius: 1px;
+        }
+        .audio-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 10px;
+            width: 10px;
+            border-radius: 50%;
+            background: currentColor;
+            margin-top: -4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-300 min-h-screen flex transition-colors duration-500">
+<input class="hidden peer/design" id="focus-toggle-design" type="checkbox"/>
+<input class="hidden peer/build" id="focus-toggle-build" type="checkbox"/>
+<div class="dim-overlay fixed inset-0 bg-background-dark/90 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-700 z-40"></div>
+<aside class="w-64 border-r border-slate-200 dark:border-slate-800 flex-shrink-0 flex flex-col bg-white dark:bg-[#080b11] hidden md:flex z-10">
+<div class="p-8 flex items-center gap-3">
+<div class="w-8 h-8 bg-gradient-to-br from-primary to-zen rounded-lg flex items-center justify-center text-white font-bold">V</div>
+<span class="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Vibecoder Zen</span>
+</div>
+<div class="px-6 py-4">
+<h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mb-4 px-2">Daily Zen Schedule</h3>
+<div class="space-y-4">
+<div class="relative pl-6 border-l border-slate-200 dark:border-slate-800 py-1">
+<div class="absolute -left-[5px] top-2 w-2 h-2 rounded-full bg-slate-300 dark:bg-slate-700"></div>
+<p class="text-[10px] text-slate-500 font-medium">09:00 - 10:30</p>
+<p class="text-xs font-semibold text-slate-400">Focus Block 1</p>
+</div>
+<div class="relative pl-6 border-l-2 border-primary py-1 bg-primary/5 rounded-r-lg">
+<div class="absolute -left-[6px] top-2 w-2.5 h-2.5 rounded-full bg-primary active-glow"></div>
+<p class="text-[10px] text-primary font-bold">14:00 - 16:00</p>
+<p class="text-xs font-bold text-white">Focus Block 2</p>
+<p class="text-[10px] text-primary/80 mt-1 italic">Building Phase Active</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 px-4 py-8 space-y-1 mt-4">
+<a class="flex items-center gap-3 px-4 py-3 text-primary bg-primary/5 rounded-xl border-l-2 border-primary" href="#">
+<span class="material-symbols-outlined">center_focus_strong</span>
+<span class="font-semibold">Zen Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-slate-500 hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">psychology</span>
+<span class="font-medium">Garden Ideas</span>
+</a>
+</nav>
+</aside>
+<main class="flex-1 flex flex-col min-h-screen overflow-hidden">
+<header class="h-20 border-b border-slate-200 dark:border-slate-900 flex items-center justify-between px-10 bg-white/5 dark:bg-background-dark/50 glass-effect sticky top-0 z-10">
+<div>
+<h1 class="text-2xl font-bold text-white tracking-tight">Golden Rule Dashboard</h1>
+<p class="text-xs text-slate-500 mt-0.5">Focus is the key to mastery. One project at a time.</p>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-2 text-xs font-medium text-slate-400 bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-800">
+<span class="w-2 h-2 rounded-full bg-green-500"></span>
+                System Calm
+            </div>
+<button class="bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-transform">
+                New Project
+            </button>
+</div>
+</header>
+<div class="flex-1 overflow-y-auto custom-scrollbar p-10 space-y-12">
+<section>
+<div class="flex items-center justify-between mb-6">
+<h2 class="text-xs font-black uppercase tracking-[0.3em] text-slate-500 flex items-center gap-2">
+<span class="material-symbols-outlined !text-[14px]">auto_awesome</span>
+                    Deep Work Zones
+                </h2>
+<div class="flex items-center gap-4 text-[10px] font-bold text-slate-600">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined !text-xs">lock</span> Strict Limit Enforced</span>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+<div class="group relative bg-card-light dark:bg-card-dark rounded-[2rem] border border-slate-200 dark:border-slate-800 p-8 flex flex-col gap-6 transition-all duration-500" id="design-card">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">architecture</span>
+</span>
+<div>
+<h3 class="font-bold text-xl tracking-tight text-white uppercase">Designing</h3>
+<p class="text-xs text-slate-500">Deep strategy session</p>
+</div>
+</div>
+<div class="bg-primary/10 text-primary text-[10px] font-black px-3 py-1 rounded-full border border-primary/20">
+                            1 / 1 SLOTS
+                        </div>
+</div>
+<div class="bg-white/5 rounded-2xl p-6 border border-white/5 relative">
+<div class="absolute inset-0 bg-primary/10 backdrop-blur-sm rounded-2xl z-20 flex flex-col items-center justify-center border-2 border-primary/50 opacity-0 pointer-events-none transition-opacity duration-300" id="design-notification-overlay">
+<div class="relative">
+<span class="material-symbols-outlined text-primary text-5xl animate-bell-ring">notifications_active</span>
+<div class="absolute inset-0 text-primary/30 zen-bell-ripple"></div>
+</div>
+<p class="text-primary font-black uppercase tracking-widest text-sm mt-4">Session Complete</p>
+<button class="mt-4 text-[10px] font-bold text-white bg-primary px-4 py-2 rounded-lg">Acknowledge</button>
+</div>
+<div class="flex justify-between items-start mb-6">
+<div>
+<h4 class="text-lg font-bold text-white">Wellness Dashboard</h4>
+<div class="flex items-center gap-2 mt-2">
+<span class="px-2 py-0.5 bg-cyan-500/10 text-cyan-500 text-[9px] font-black uppercase tracking-wider rounded border border-cyan-500/20">AI Co-Pilot Active</span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-3">
+<div class="flex items-center gap-3 bg-slate-900/60 py-1.5 px-3 rounded-full border border-white/10 group/audio">
+<div class="relative flex items-center justify-center w-6 h-6 text-focus">
+<span class="material-symbols-outlined !text-lg cursor-pointer hover:scale-110 transition-transform">notifications</span>
+<div class="absolute inset-0 zen-bell-ripple opacity-40"></div>
+</div>
+<input class="w-12 h-1 audio-slider text-focus" type="range" value="70"/>
+</div>
+<div class="relative w-14 h-14 flex items-center justify-center">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-slate-800" cx="28" cy="28" fill="transparent" r="24" stroke="currentColor" stroke-width="3"></circle>
+<circle class="text-focus timer-ring" cx="28" cy="28" fill="transparent" r="24" stroke="currentColor" stroke-width="3" style="stroke-dashoffset: 45;"></circle>
+</svg>
+<span class="absolute text-[10px] font-bold text-white">90:00</span>
+</div>
+<div class="timer-active hidden items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-focus animate-flow-glow"></span>
+<span class="text-[9px] font-black text-focus uppercase tracking-widest">Flow State</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 mb-8">
+<div class="bg-slate-900/40 p-3 rounded-xl border border-white/5">
+<p class="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Duration Suggestion</p>
+<p class="text-[11px] font-bold text-focus">90 Min Focus Block</p>
+</div>
+<div class="bg-primary/10 p-3 rounded-xl border border-primary/10">
+<p class="text-[8px] font-black text-primary uppercase tracking-widest mb-1">Zen Bell Status</p>
+<p class="text-[11px] font-bold text-white">Notification enabled</p>
+</div>
+</div>
+<div class="flex flex-col items-center gap-2">
+<label class="cursor-pointer group/btn relative overflow-hidden bg-slate-900 border border-slate-700 hover:border-focus px-8 py-3 rounded-2xl transition-all duration-300" for="focus-toggle-design">
+<div class="flex items-center gap-3 timer-idle">
+<span class="material-symbols-outlined text-focus">timer</span>
+<span class="text-xs font-black text-white uppercase tracking-widest">Start Focus Session</span>
+</div>
+<div class="hidden items-center gap-3 timer-active">
+<span class="material-symbols-outlined text-focus">stop_circle</span>
+<span class="text-xs font-black text-white uppercase tracking-widest">End Session</span>
+</div>
+<div class="absolute inset-0 bg-focus opacity-0 group-hover/btn:opacity-10 transition-opacity"></div>
+</label>
+</div>
+</div>
+</div>
+<div class="group relative bg-card-light dark:bg-card-dark rounded-[2rem] border-2 border-primary/20 p-8 flex flex-col gap-6 active-glow transition-all duration-500" id="build-card">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<span class="w-10 h-10 rounded-2xl bg-zen/10 flex items-center justify-center text-zen">
+<span class="material-symbols-outlined">terminal</span>
+</span>
+<div>
+<h3 class="font-bold text-xl tracking-tight text-white uppercase">Building</h3>
+<p class="text-xs text-zen font-bold italic">Active Block: Focus Block 2</p>
+</div>
+</div>
+<div class="bg-zen/10 text-zen text-[10px] font-black px-3 py-1 rounded-full border border-zen/20">
+                            1 / 1 SLOTS
+                        </div>
+</div>
+<div class="bg-white/5 rounded-2xl p-6 border border-zen/20 relative">
+<div class="flex justify-between items-start mb-6">
+<div>
+<h4 class="text-lg font-bold text-white">E-commerce API</h4>
+<div class="flex items-center gap-2 mt-2">
+<span class="px-2 py-0.5 bg-zen/10 text-zen text-[9px] font-black uppercase tracking-wider rounded border border-zen/20">3 AI Workers Active</span>
+</div>
+</div>
+<div class="flex flex-col items-end gap-3">
+<div class="flex items-center gap-3 bg-slate-900/60 py-1.5 px-3 rounded-full border border-white/10">
+<div class="relative flex items-center justify-center w-6 h-6 text-amber_zen">
+<span class="material-symbols-outlined !text-lg cursor-pointer">notifications</span>
+<div class="absolute inset-0 zen-bell-ripple opacity-40"></div>
+</div>
+<input class="w-12 h-1 audio-slider text-amber_zen" type="range" value="40"/>
+</div>
+<div class="relative w-14 h-14 flex items-center justify-center">
+<svg class="w-full h-full transform -rotate-90">
+<circle class="text-slate-800" cx="28" cy="28" fill="transparent" r="24" stroke="currentColor" stroke-width="3"></circle>
+<circle class="text-amber_zen timer-ring" cx="28" cy="28" fill="transparent" r="24" stroke="currentColor" stroke-width="3" style="stroke-dashoffset: 120;"></circle>
+</svg>
+<span class="absolute text-[10px] font-bold text-white">120:00</span>
+</div>
+<div class="timer-active hidden items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-amber_zen animate-flow-glow"></span>
+<span class="text-[9px] font-black text-amber_zen uppercase tracking-widest">Flow State</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4 mb-8">
+<div class="bg-slate-900/40 p-3 rounded-xl border border-white/5">
+<p class="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Duration Suggestion</p>
+<p class="text-[11px] font-bold text-amber_zen">120 Min Focus Block</p>
+</div>
+<div class="bg-zen/10 p-3 rounded-xl border border-zen/10">
+<p class="text-[8px] font-black text-zen uppercase tracking-widest mb-1">Zen Bell</p>
+<p class="text-[11px] font-bold text-white">Active chime set</p>
+</div>
+</div>
+<div class="flex items-center justify-center">
+<label class="cursor-pointer group/btn relative overflow-hidden bg-slate-900 border border-slate-700 hover:border-amber_zen px-8 py-3 rounded-2xl transition-all duration-300" for="focus-toggle-build">
+<div class="flex items-center gap-3 timer-idle">
+<span class="material-symbols-outlined text-amber_zen">bolt</span>
+<span class="text-xs font-black text-white uppercase tracking-widest">Start Focus Session</span>
+</div>
+<div class="hidden items-center gap-3 timer-active">
+<span class="material-symbols-outlined text-amber_zen">pause_circle</span>
+<span class="text-xs font-black text-white uppercase tracking-widest">End Session</span>
+</div>
+<div class="absolute inset-0 bg-amber_zen opacity-0 group-hover/btn:opacity-10 transition-opacity"></div>
+</label>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section>
+<div class="flex items-center justify-between mb-6">
+<h2 class="text-xs font-black uppercase tracking-[0.3em] text-slate-600 flex items-center gap-2">
+<span class="material-symbols-outlined !text-[14px]">potted_plant</span>
+                    The Garden
+                </h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+<div class="garden-section rounded-2xl p-5 border border-slate-800 flex flex-col gap-4">
+<div class="flex items-center justify-between border-b border-slate-800 pb-3">
+<div class="flex items-center gap-2">
+<span class="text-lg">💡</span>
+<h3 class="text-[11px] font-black uppercase tracking-wider text-slate-400">Ideas</h3>
+</div>
+</div>
+<div class="bg-white/5 p-3 rounded-lg border border-transparent hover:border-slate-700 transition-all cursor-pointer">
+<p class="text-xs font-semibold text-slate-300">Automated SEO Auditor</p>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<button class="fixed bottom-8 right-8 w-14 h-14 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl flex items-center justify-center border border-slate-200 dark:border-slate-800 hover:scale-110 active:scale-95 transition-all z-50 group" onclick="document.documentElement.classList.toggle('dark')">
+<span class="material-symbols-outlined text-primary group-dark:text-yellow-400 text-2xl">light_mode</span>
+</button>
+
+</body></html>
