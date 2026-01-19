@@ -1,0 +1,172 @@
+"use client";
+
+import { Target, Zap, TrendingUp, Clock } from "lucide-react";
+import { useZenStore } from "@/store/zen-store";
+import { cn } from "@/lib/utils";
+
+interface DeepWorkZoneProps {
+  className?: string;
+}
+
+export function DeepWorkZone({ className }: DeepWorkZoneProps) {
+  const {
+    stats,
+    isDeepWorkMode,
+    enterDeepWorkMode,
+    timerState,
+    activeProjectId,
+    projects,
+  } = useZenStore();
+
+  const activeProject = projects.find((p) => p.id === activeProjectId);
+
+  // Calculate daily goal progress (8 hours = 480 minutes)
+  const dailyGoalMinutes = 480;
+  const dailyProgress = Math.min(
+    (stats.todayMinutes / dailyGoalMinutes) * 100,
+    100
+  );
+
+  return (
+    <div className={cn("space-y-4", className)}>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
+          Deep Work
+        </h3>
+        <button
+          onClick={enterDeepWorkMode}
+          disabled={isDeepWorkMode || timerState === "running"}
+          className={cn(
+            "px-3 py-1.5 text-xs font-medium rounded-lg transition-all",
+            isDeepWorkMode
+              ? "bg-green-500/20 text-green-400 border border-green-500/30"
+              : timerState === "running"
+              ? "bg-gray-800 text-gray-500 cursor-not-allowed"
+              : "bg-gradient-to-r from-cyan-500 to-purple-500 text-white hover:from-cyan-400 hover:to-purple-400"
+          )}
+        >
+          {isDeepWorkMode ? "In Deep Work" : "Enter Focus Mode"}
+        </button>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Today's Focus */}
+        <div className="p-3 rounded-lg bg-gray-900/50 border border-gray-800">
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="w-4 h-4 text-cyan-400" />
+            <span className="text-xs text-gray-400">Hôm nay</span>
+          </div>
+          <div className="text-2xl font-bold text-white">
+            {Math.floor(stats.todayMinutes / 60)}h {stats.todayMinutes % 60}m
+          </div>
+          <div className="mt-2">
+            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <span>Mục tiêu: 8h</span>
+              <span>{Math.round(dailyProgress)}%</span>
+            </div>
+            <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-purple-500 transition-all duration-500"
+                style={{ width: `${dailyProgress}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Streak */}
+        <div className="p-3 rounded-lg bg-gray-900/50 border border-gray-800">
+          <div className="flex items-center gap-2 mb-2">
+            <Zap className="w-4 h-4 text-amber-400" />
+            <span className="text-xs text-gray-400">Streak</span>
+          </div>
+          <div className="text-2xl font-bold text-white">
+            {stats.streak} days
+          </div>
+          <div className="mt-2 flex gap-0.5">
+            {[...Array(7)].map((_, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "flex-1 h-1.5 rounded-full",
+                  i < stats.streak % 7
+                    ? "bg-amber-400"
+                    : "bg-gray-800"
+                )}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Flow Sessions */}
+        <div className="p-3 rounded-lg bg-gray-900/50 border border-gray-800">
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="w-4 h-4 text-green-400" />
+            <span className="text-xs text-gray-400">Flow Sessions</span>
+          </div>
+          <div className="text-2xl font-bold text-white">
+            {stats.flowSessions}
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Tuần này
+          </p>
+        </div>
+
+        {/* Week Progress */}
+        <div className="p-3 rounded-lg bg-gray-900/50 border border-gray-800">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp className="w-4 h-4 text-purple-400" />
+            <span className="text-xs text-gray-400">Tuần này</span>
+          </div>
+          <div className="text-2xl font-bold text-white">
+            {Math.floor(stats.weekMinutes / 60)}h
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            {stats.tasksCompleted} tasks hoàn thành
+          </p>
+        </div>
+      </div>
+
+      {/* Active Project */}
+      {activeProject && (
+        <div className="p-3 rounded-lg bg-gray-900/50 border border-gray-800">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: `${activeProject.color}20` }}
+            >
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: activeProject.color }}
+              />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-medium text-white">{activeProject.name}</h4>
+              <p className="text-xs text-gray-400">
+                {Math.floor(activeProject.completedMinutes / 60)}h /{" "}
+                {Math.floor(activeProject.totalMinutes / 60)}h
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-sm font-medium text-cyan-400">
+                {Math.round(
+                  (activeProject.completedMinutes / activeProject.totalMinutes) * 100
+                )}%
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${(activeProject.completedMinutes / activeProject.totalMinutes) * 100}%`,
+                backgroundColor: activeProject.color,
+              }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

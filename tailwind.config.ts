@@ -78,6 +78,15 @@ const config: Config = {
         "slide-down": "slideDown 0.3s ease-out",
         "scale-in": "scaleIn 0.3s ease-out",
         "pulse-glow": "pulseGlow 2s ease-in-out infinite",
+        // Zen animations
+        "flow-glow": "flowGlow 3s ease-in-out infinite",
+        "bell-ring": "bellRing 0.5s ease-in-out",
+        "ripple": "ripple 1s ease-out forwards",
+        "breathe": "breathe 4s ease-in-out infinite",
+        "timer-pulse": "timerPulse 1s ease-in-out infinite",
+        "zen-fade": "zenFade 0.3s ease-out",
+        "slide-in-right": "slideInRight 0.3s ease-out",
+        "float": "float 6s ease-in-out infinite",
       },
       keyframes: {
         fadeIn: {
@@ -99,6 +108,46 @@ const config: Config = {
         pulseGlow: {
           "0%, 100%": { boxShadow: "0 0 20px rgba(0, 212, 255, 0.3)" },
           "50%": { boxShadow: "0 0 40px rgba(0, 212, 255, 0.5)" },
+        },
+        // Zen keyframes
+        flowGlow: {
+          "0%, 100%": {
+            boxShadow: "0 0 20px rgba(34, 197, 94, 0.4), 0 0 40px rgba(34, 197, 94, 0.2)",
+          },
+          "50%": {
+            boxShadow: "0 0 40px rgba(34, 197, 94, 0.6), 0 0 80px rgba(34, 197, 94, 0.4)",
+          },
+        },
+        bellRing: {
+          "0%, 100%": { transform: "rotate(0deg)" },
+          "20%": { transform: "rotate(15deg)" },
+          "40%": { transform: "rotate(-15deg)" },
+          "60%": { transform: "rotate(10deg)" },
+          "80%": { transform: "rotate(-10deg)" },
+        },
+        ripple: {
+          "0%": { transform: "scale(1)", opacity: "0.6" },
+          "100%": { transform: "scale(2.5)", opacity: "0" },
+        },
+        breathe: {
+          "0%, 100%": { transform: "scale(1)", opacity: "0.8" },
+          "50%": { transform: "scale(1.05)", opacity: "1" },
+        },
+        timerPulse: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.7" },
+        },
+        zenFade: {
+          "0%": { opacity: "0", transform: "translateY(10px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        slideInRight: {
+          "0%": { opacity: "0", transform: "translateX(20px)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-10px)" },
         },
       },
     },
