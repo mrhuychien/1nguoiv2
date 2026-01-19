@@ -18,6 +18,9 @@ import {
 import { generateId } from "@/lib/utils";
 
 interface ZenStoreState {
+  // Data loading
+  isInitialized: boolean;
+
   // Projects & Tasks
   projects: ZenProject[];
   activeProjectId: string | null;
@@ -52,6 +55,11 @@ interface ZenStoreState {
 }
 
 interface ZenStoreActions {
+  // Data setters (for Supabase sync)
+  setProjects: (projects: ZenProject[]) => void;
+  setStats: (stats: ZenStats) => void;
+  setIsInitialized: (initialized: boolean) => void;
+
   // Project actions
   addProject: (name: string, color: string, icon: string) => void;
   updateProject: (id: string, updates: Partial<ZenProject>) => void;
@@ -101,90 +109,12 @@ interface ZenStoreActions {
 
 type ZenStore = ZenStoreState & ZenStoreActions;
 
-// Mock projects for demo
-const mockProjects: ZenProject[] = [
-  {
-    id: "p1",
-    name: "1nguoi.com",
-    color: "#00d4ff",
-    icon: "rocket",
-    totalMinutes: 480,
-    completedMinutes: 245,
-    tasks: [
-      {
-        id: "t1",
-        projectId: "p1",
-        title: "Hoàn thành Zen Dashboard",
-        status: "in_progress",
-        estimatedMinutes: 120,
-        actualMinutes: 45,
-        priority: 1,
-        createdAt: new Date(),
-      },
-      {
-        id: "t2",
-        projectId: "p1",
-        title: "Tích hợp Supabase Auth",
-        status: "completed",
-        estimatedMinutes: 60,
-        actualMinutes: 55,
-        priority: 2,
-        completedAt: new Date(),
-        createdAt: new Date(),
-      },
-      {
-        id: "t3",
-        projectId: "p1",
-        title: "Thiết kế Landing Page",
-        status: "pending",
-        estimatedMinutes: 90,
-        actualMinutes: 0,
-        priority: 3,
-        createdAt: new Date(),
-      },
-    ],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: "p2",
-    name: "Blog cá nhân",
-    color: "#a855f7",
-    icon: "pen",
-    totalMinutes: 240,
-    completedMinutes: 120,
-    tasks: [
-      {
-        id: "t4",
-        projectId: "p2",
-        title: "Viết bài về Solopreneur",
-        status: "pending",
-        estimatedMinutes: 45,
-        actualMinutes: 0,
-        priority: 1,
-        createdAt: new Date(),
-      },
-    ],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: "p3",
-    name: "Học TypeScript",
-    color: "#22c55e",
-    icon: "book",
-    totalMinutes: 180,
-    completedMinutes: 90,
-    tasks: [],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-];
-
 const initialState: ZenStoreState = {
-  projects: mockProjects,
-  activeProjectId: "p1",
-  activeTaskId: "t1",
+  isInitialized: false,
+
+  projects: [],
+  activeProjectId: null,
+  activeTaskId: null,
 
   timerState: "idle",
   timerSeconds: 0,
@@ -200,12 +130,12 @@ const initialState: ZenStoreState = {
   sessions: [],
 
   stats: {
-    todayMinutes: 125,
-    weekMinutes: 840,
-    streak: 7,
-    flowSessions: 12,
-    tasksCompleted: 5,
-    projectsActive: 3,
+    todayMinutes: 0,
+    weekMinutes: 0,
+    streak: 0,
+    flowSessions: 0,
+    tasksCompleted: 0,
+    projectsActive: 0,
   },
 
   showSessionComplete: false,
@@ -218,6 +148,24 @@ export const useZenStore = create<ZenStore>()(
   persist(
     (set, get) => ({
       ...initialState,
+
+      // Data setters (for Supabase sync)
+      setProjects: (projects) => {
+        set({ projects });
+        // Set first project as active if none selected
+        if (projects.length > 0 && !get().activeProjectId) {
+          set({ activeProjectId: projects[0].id });
+          // Set first task as active if available
+          const firstTask = projects[0].tasks[0];
+          if (firstTask && !get().activeTaskId) {
+            set({ activeTaskId: firstTask.id });
+          }
+        }
+      },
+
+      setStats: (stats) => set({ stats }),
+
+      setIsInitialized: (initialized) => set({ isInitialized: initialized }),
 
       // Project actions
       addProject: (name, color, icon) => {

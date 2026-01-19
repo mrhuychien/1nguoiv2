@@ -49,6 +49,10 @@ export interface Database {
           deadline: string | null
           last_task: string | null
           current_task: string | null
+          color: string
+          icon: string
+          total_minutes: number
+          completed_minutes: number
           created_at: string
           updated_at: string
         }
@@ -65,6 +69,10 @@ export interface Database {
           deadline?: string | null
           last_task?: string | null
           current_task?: string | null
+          color?: string
+          icon?: string
+          total_minutes?: number
+          completed_minutes?: number
           created_at?: string
           updated_at?: string
         }
@@ -81,6 +89,10 @@ export interface Database {
           deadline?: string | null
           last_task?: string | null
           current_task?: string | null
+          color?: string
+          icon?: string
+          total_minutes?: number
+          completed_minutes?: number
           created_at?: string
           updated_at?: string
         }
@@ -95,6 +107,11 @@ export interface Database {
           completed: boolean
           is_daily_focus: boolean
           due_date: string | null
+          status: 'pending' | 'in_progress' | 'completed' | 'blocked'
+          estimated_minutes: number
+          actual_minutes: number
+          priority: number
+          completed_at: string | null
           created_at: string
           updated_at: string
         }
@@ -107,6 +124,11 @@ export interface Database {
           completed?: boolean
           is_daily_focus?: boolean
           due_date?: string | null
+          status?: 'pending' | 'in_progress' | 'completed' | 'blocked'
+          estimated_minutes?: number
+          actual_minutes?: number
+          priority?: number
+          completed_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -119,6 +141,11 @@ export interface Database {
           completed?: boolean
           is_daily_focus?: boolean
           due_date?: string | null
+          status?: 'pending' | 'in_progress' | 'completed' | 'blocked'
+          estimated_minutes?: number
+          actual_minutes?: number
+          priority?: number
+          completed_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -242,6 +269,47 @@ export interface Database {
           created_at?: string
         }
       }
+      zen_stats: {
+        Row: {
+          id: string
+          user_id: string
+          date: string
+          today_minutes: number
+          week_minutes: number
+          streak: number
+          flow_sessions: number
+          tasks_completed: number
+          projects_active: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          date?: string
+          today_minutes?: number
+          week_minutes?: number
+          streak?: number
+          flow_sessions?: number
+          tasks_completed?: number
+          projects_active?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          date?: string
+          today_minutes?: number
+          week_minutes?: number
+          streak?: number
+          flow_sessions?: number
+          tasks_completed?: number
+          projects_active?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -265,6 +333,7 @@ export type Graph = Database['public']['Tables']['graphs']['Row']
 export type Node = Database['public']['Tables']['nodes']['Row']
 export type Link = Database['public']['Tables']['links']['Row']
 export type TimeEntry = Database['public']['Tables']['time_entries']['Row']
+export type ZenStatsRow = Database['public']['Tables']['zen_stats']['Row']
 
 // Insert types
 export type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
@@ -274,6 +343,7 @@ export type GraphInsert = Database['public']['Tables']['graphs']['Insert']
 export type NodeInsert = Database['public']['Tables']['nodes']['Insert']
 export type LinkInsert = Database['public']['Tables']['links']['Insert']
 export type TimeEntryInsert = Database['public']['Tables']['time_entries']['Insert']
+export type ZenStatsInsert = Database['public']['Tables']['zen_stats']['Insert']
 
 // Update types
 export type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
@@ -283,3 +353,4 @@ export type GraphUpdate = Database['public']['Tables']['graphs']['Update']
 export type NodeUpdate = Database['public']['Tables']['nodes']['Update']
 export type LinkUpdate = Database['public']['Tables']['links']['Update']
 export type TimeEntryUpdate = Database['public']['Tables']['time_entries']['Update']
+export type ZenStatsUpdate = Database['public']['Tables']['zen_stats']['Update']

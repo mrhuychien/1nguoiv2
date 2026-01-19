@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Settings, HelpCircle } from "lucide-react";
+import { Settings, HelpCircle, Loader2 } from "lucide-react";
 import {
   TimerRing,
   ZenBell,
@@ -16,13 +16,18 @@ import {
   DeepWorkOverlay,
 } from "@/components/zen";
 import { useZenStore, getCurrentZone } from "@/store/zen-store";
+import { useZenData } from "@/hooks/use-zen-data";
 
 export default function ZenPage() {
   const {
     setCurrentZone,
     activeProjectId,
     projects,
+    isInitialized,
   } = useZenStore();
+
+  // Fetch data from Supabase
+  const { isLoading } = useZenData();
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
@@ -31,6 +36,18 @@ export default function ZenPage() {
     const zone = getCurrentZone();
     setCurrentZone(zone);
   }, [setCurrentZone]);
+
+  // Show loading state while fetching data
+  if (isLoading && !isInitialized) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-cyan" />
+          <p className="text-gray-400">Đang tải dữ liệu Zen...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
