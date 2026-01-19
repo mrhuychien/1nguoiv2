@@ -49,32 +49,33 @@ const ZONE_CONFIG: Record<
 
 export function ZenSchedule({ className }: ZenScheduleProps) {
   const { currentZone, setCurrentZone } = useZenStore();
-  const [now, setNow] = useState(new Date());
+  const [isMounted, setIsMounted] = useState(false);
+  const [timeString, setTimeString] = useState("--:--");
 
   // Update current time every minute
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(new Date());
+    setIsMounted(true);
+
+    const updateTime = () => {
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, "0");
+      const minutes = now.getMinutes().toString().padStart(2, "0");
+      setTimeString(`${hours}:${minutes}`);
+
       const zone = getCurrentZone();
       if (zone !== currentZone) {
         setCurrentZone(zone);
       }
-    }, 60000);
+    };
 
-    // Initial check
-    const zone = getCurrentZone();
-    if (zone !== currentZone) {
-      setCurrentZone(zone);
-    }
+    // Initial update
+    updateTime();
+
+    // Update every minute
+    const interval = setInterval(updateTime, 60000);
 
     return () => clearInterval(interval);
   }, [currentZone, setCurrentZone]);
-
-  const currentHour = now.getHours();
-  const currentMinutes = now.getMinutes();
-  const timeString = `${currentHour.toString().padStart(2, "0")}:${currentMinutes
-    .toString()
-    .padStart(2, "0")}`;
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -187,6 +188,21 @@ export function ZenSchedule({ className }: ZenScheduleProps) {
 // Compact schedule indicator for header
 export function ZenScheduleIndicator({ className }: { className?: string }) {
   const { currentZone } = useZenStore();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Show loading state until mounted
+  if (!isMounted) {
+    return (
+      <div className={cn("flex items-center gap-1.5 text-gray-500", className)}>
+        <div className="w-2 h-2 rounded-full bg-gray-600" />
+        <span className="text-xs">...</span>
+      </div>
+    );
+  }
 
   if (!currentZone) {
     return (
