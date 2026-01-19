@@ -14,8 +14,15 @@ import {
   DeepWorkZone,
   DEFAULT_SCHEDULE_BLOCKS,
   DEFAULT_TIMER_CONFIG,
+  ProjectTask,
+  TemplateId,
+  TaskStatus,
 } from "@/types/zen";
 import { generateId } from "@/lib/utils";
+import {
+  generateTasksFromTemplate,
+  getTemplateById,
+} from "@/lib/data/project-templates";
 
 interface ZenStoreState {
   // Data loading
@@ -25,6 +32,9 @@ interface ZenStoreState {
   projects: ZenProject[];
   activeProjectId: string | null;
   activeTaskId: string | null;
+
+  // Template Tasks (separate from project tasks)
+  templateTasks: ProjectTask[];
 
   // Timer
   timerState: TimerState;
@@ -62,6 +72,12 @@ interface ZenStoreActions {
 
   // Project actions
   addProject: (name: string, color: string, icon: string) => void;
+  addProjectWithTemplate: (
+    name: string,
+    color: string,
+    icon: string,
+    templateId: TemplateId
+  ) => void;
   updateProject: (id: string, updates: Partial<ZenProject>) => void;
   deleteProject: (id: string) => void;
   setActiveProject: (id: string | null) => void;
@@ -72,6 +88,16 @@ interface ZenStoreActions {
   deleteTask: (projectId: string, taskId: string) => void;
   completeTask: (projectId: string, taskId: string) => void;
   setActiveTask: (taskId: string | null) => void;
+
+  // Template Task actions
+  getProjectTemplateTasks: (projectId: string) => ProjectTask[];
+  getCurrentTemplateTask: (projectId: string) => ProjectTask | null;
+  updateTemplateTaskStatus: (taskId: string, status: TaskStatus) => void;
+  completeTemplateTask: (taskId: string) => void;
+  skipTemplateTask: (taskId: string) => void;
+  startTemplateTask: (taskId: string) => void;
+  updateTemplateTaskNotes: (taskId: string, notes: string) => void;
+  addTemplateTaskTime: (taskId: string, minutes: number) => void;
 
   // Timer actions
   startTimer: (minutes?: number) => void;
@@ -115,6 +141,8 @@ const initialState: ZenStoreState = {
   projects: [],
   activeProjectId: null,
   activeTaskId: null,
+
+  templateTasks: [],
 
   timerState: "idle",
   timerSeconds: 0,
@@ -182,6 +210,40 @@ export const useZenStore = create<ZenStore>()(
         };
         set((state) => ({
           projects: [...state.projects, newProject],
+          showNewProjectModal: false,
+        }));
+      },
+
+      addProjectWithTemplate: (name, color, icon, templateId) => {
+        const template = getTemplateById(templateId);
+        const projectId = generateId();
+        const totalMinutes = template
+          ? template.tasks.reduce((sum, t) => sum + t.estimatedMinutes, 0)
+          : 0;
+
+        const newProject: ZenProject = {
+          id: projectId,
+          name,
+          color,
+          icon,
+          totalMinutes,
+          completedMinutes: 0,
+          tasks: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          templateId,
+          currentPhase: 1,
+          totalTasks: template?.tasks.length || 0,
+          completedTasks: 0,
+        };
+
+        // Generate template tasks
+        const newTasks = generateTasksFromTemplate(projectId, templateId);
+
+        set((state) => ({
+          projects: [...state.projects, newProject],
+          templateTasks: [...state.templateTasks, ...newTasks],
+          activeProjectId: projectId,
           showNewProjectModal: false,
         }));
       },
@@ -278,6 +340,113 @@ export const useZenStore = create<ZenStore>()(
       },
 
       setActiveTask: (taskId) => set({ activeTaskId: taskId }),
+
+      // Template Task actions
+      getProjectTemplateTasks: (projectId) => {
+        return get()
+          .templateTasks.filter((t) => t.projectId === projectId)
+          .sort((a, b) => a.phase - b.phase);
+      },
+
+      getCurrentTemplateTask: (projectId) => {
+        const tasks = get().getProjectTemplateTasks(projectId);
+        return (
+          tasks.find((t) => t.status === "in_progress") ||
+          tasks.find((t) => t.status === "pending") ||
+          null
+        );
+      },
+
+      updateTemplateTaskStatus: (taskId, status) => {
+        set({
+          templateTasks: get().templateTasks.map((t) =>
+            t.id === taskId
+              ? {
+                  ...t,
+                  status,
+                  completedAt:
+                    status === "completed" ? new Date().toISOString() : t.completedAt,
+                }
+              : t
+          ),
+        });
+
+        // Update project progress
+        const task = get().templateTasks.find((t) => t.id === taskId);
+        if (task) {
+          const projectTasks = get().getProjectTemplateTasks(task.projectId);
+          const completedCount = projectTasks.filter(
+            (t) => t.status === "completed"
+          ).length;
+          const currentPhase =
+            projectTasks.find(
+              (t) => t.status === "in_progress" || t.status === "pending"
+            )?.phase || projectTasks.length;
+
+          const completedMinutes = projectTasks
+            .filter((t) => t.status === "completed")
+            .reduce((sum, t) => sum + t.timeSpentMinutes, 0);
+
+          // Update the project
+          set({
+            projects: get().projects.map((p) =>
+              p.id === task.projectId
+                ? {
+                    ...p,
+                    completedTasks: completedCount,
+                    currentPhase,
+                    completedMinutes,
+                    updatedAt: new Date(),
+                  }
+                : p
+            ),
+          });
+        }
+      },
+
+      completeTemplateTask: (taskId) => {
+        get().updateTemplateTaskStatus(taskId, "completed");
+      },
+
+      skipTemplateTask: (taskId) => {
+        get().updateTemplateTaskStatus(taskId, "skipped");
+      },
+
+      startTemplateTask: (taskId) => {
+        // Set all other in_progress tasks to pending first
+        const task = get().templateTasks.find((t) => t.id === taskId);
+        if (!task) return;
+
+        set({
+          templateTasks: get().templateTasks.map((t) => ({
+            ...t,
+            status:
+              t.projectId === task.projectId && t.status === "in_progress"
+                ? "pending"
+                : t.status,
+          })),
+        });
+
+        get().updateTemplateTaskStatus(taskId, "in_progress");
+      },
+
+      updateTemplateTaskNotes: (taskId, notes) => {
+        set({
+          templateTasks: get().templateTasks.map((t) =>
+            t.id === taskId ? { ...t, notes } : t
+          ),
+        });
+      },
+
+      addTemplateTaskTime: (taskId, minutes) => {
+        set({
+          templateTasks: get().templateTasks.map((t) =>
+            t.id === taskId
+              ? { ...t, timeSpentMinutes: t.timeSpentMinutes + minutes }
+              : t
+          ),
+        });
+      },
 
       // Timer actions
       startTimer: (minutes) => {
@@ -484,6 +653,7 @@ export const useZenStore = create<ZenStore>()(
         stats: state.stats,
         bellEnabled: state.bellEnabled,
         sessionsCompleted: state.sessionsCompleted,
+        templateTasks: state.templateTasks,
       }),
     }
   )

@@ -1,8 +1,11 @@
 "use client";
 
-import { Target, Zap, TrendingUp, Clock } from "lucide-react";
+import { useState } from "react";
+import { Target, Zap, TrendingUp, Clock, ListTodo } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
 import { cn } from "@/lib/utils";
+import { TaskList } from "./task-list";
+import { ProjectTasksPanel } from "./project-tasks-panel";
 
 interface DeepWorkZoneProps {
   className?: string;
@@ -16,9 +19,16 @@ export function DeepWorkZone({ className }: DeepWorkZoneProps) {
     timerState,
     activeProjectId,
     projects,
+    getCurrentTemplateTask,
   } = useZenStore();
+  const [showTasksPanel, setShowTasksPanel] = useState(false);
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
+  const hasTemplate =
+    activeProject?.templateId && activeProject.templateId !== "blank";
+  const currentTask = activeProject
+    ? getCurrentTemplateTask(activeProject.id)
+    : null;
 
   // Calculate daily goal progress (8 hours = 480 minutes)
   const dailyGoalMinutes = 480;
@@ -144,28 +154,97 @@ export function DeepWorkZone({ className }: DeepWorkZoneProps) {
             <div className="flex-1">
               <h4 className="font-medium text-white">{activeProject.name}</h4>
               <p className="text-xs text-gray-400">
-                {Math.floor(activeProject.completedMinutes / 60)}h /{" "}
-                {Math.floor(activeProject.totalMinutes / 60)}h
+                {hasTemplate ? (
+                  <>
+                    Phase {activeProject.currentPhase || 1} •{" "}
+                    {activeProject.completedTasks || 0}/
+                    {activeProject.totalTasks || 0} tasks
+                  </>
+                ) : (
+                  <>
+                    {Math.floor(activeProject.completedMinutes / 60)}h /{" "}
+                    {Math.floor(activeProject.totalMinutes / 60)}h
+                  </>
+                )}
               </p>
             </div>
-            <div className="text-right">
+            <div className="text-right flex flex-col items-end gap-1">
               <span className="text-sm font-medium text-cyan-400">
-                {Math.round(
-                  (activeProject.completedMinutes / activeProject.totalMinutes) * 100
-                )}%
+                {hasTemplate && activeProject.totalTasks
+                  ? Math.round(
+                      ((activeProject.completedTasks || 0) /
+                        activeProject.totalTasks) *
+                        100
+                    )
+                  : activeProject.totalMinutes > 0
+                  ? Math.round(
+                      (activeProject.completedMinutes /
+                        activeProject.totalMinutes) *
+                        100
+                    )
+                  : 0}
+                %
               </span>
+              {hasTemplate && (
+                <button
+                  onClick={() => setShowTasksPanel(true)}
+                  className="text-[10px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+                >
+                  <ListTodo className="w-3 h-3" />
+                  Tasks
+                </button>
+              )}
             </div>
           </div>
           <div className="mt-2 h-1.5 bg-gray-800 rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-500"
               style={{
-                width: `${(activeProject.completedMinutes / activeProject.totalMinutes) * 100}%`,
+                width: `${
+                  hasTemplate && activeProject.totalTasks
+                    ? ((activeProject.completedTasks || 0) /
+                        activeProject.totalTasks) *
+                      100
+                    : activeProject.totalMinutes > 0
+                    ? (activeProject.completedMinutes /
+                        activeProject.totalMinutes) *
+                      100
+                    : 0
+                }%`,
                 backgroundColor: activeProject.color,
               }}
             />
           </div>
+
+          {/* Current Task (for template projects) */}
+          {hasTemplate && currentTask && (
+            <div className="mt-3 p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/20">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">{currentTask.emoji}</span>
+                <span className="text-xs text-white flex-1 truncate">
+                  {currentTask.title}
+                </span>
+                <span className="text-[10px] text-cyan-400">
+                  {currentTask.status === "in_progress"
+                    ? "Đang làm"
+                    : "Tiếp theo"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Compact Task List (for template projects) */}
+          {hasTemplate && (
+            <div className="mt-3">
+              <TaskList projectId={activeProject.id} compact />
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Tasks Panel */}
+      {showTasksPanel && (
+        <ProjectTasksPanel onClose={() => setShowTasksPanel(false)} />
       )}
     </div>
   );

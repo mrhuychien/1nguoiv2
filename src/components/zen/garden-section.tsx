@@ -42,6 +42,11 @@ const STATUS_CONFIG: Record<
     color: "text-red-400",
     label: "Blocked",
   },
+  skipped: {
+    icon: Circle,
+    color: "text-gray-500",
+    label: "Bỏ qua",
+  },
 };
 
 export function GardenSection({ className }: GardenSectionProps) {
@@ -64,7 +69,13 @@ export function GardenSection({ className }: GardenSectionProps) {
 
   // Sort tasks: in_progress first, then pending, then completed
   const sortedTasks = [...tasks].sort((a, b) => {
-    const order = { in_progress: 0, pending: 1, completed: 2, blocked: 3 };
+    const order: Record<TaskStatus, number> = {
+      in_progress: 0,
+      pending: 1,
+      completed: 2,
+      blocked: 3,
+      skipped: 4,
+    };
     return order[a.status] - order[b.status];
   });
 

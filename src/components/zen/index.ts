@@ -6,3 +6,8 @@ export { DeepWorkZone } from "./deep-work-zone";
 export { GardenSection } from "./garden-section";
 export { SessionCompleteOverlay, DeepWorkOverlay } from "./zen-overlays";
 export { ProjectSidebar, NewProjectModal } from "./project-sidebar";
+// Task Templates
+export { TemplateSelector } from "./template-selector";
+export { TemplatePreview } from "./template-preview";
+export { TaskList } from "./task-list";
+export { ProjectTasksPanel } from "./project-tasks-panel";

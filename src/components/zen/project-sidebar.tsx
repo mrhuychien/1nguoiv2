@@ -11,9 +11,17 @@ import {
   Briefcase,
   Code,
   Palette,
+  ListTodo,
 } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
 import { cn } from "@/lib/utils";
+import { TemplateSelector } from "./template-selector";
+import { TemplatePreview } from "./template-preview";
+import type { TemplateId } from "@/types/zen";
+import {
+  getTemplateEstimatedTime,
+  formatMinutesToHours,
+} from "@/lib/data/project-templates";
 
 interface ProjectSidebarProps {
   className?: string;
@@ -152,119 +160,206 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
   );
 }
 
-// New Project Modal
+// New Project Modal with Template Support
 export function NewProjectModal() {
-  const { showNewProjectModal, setShowNewProjectModal, addProject } =
-    useZenStore();
+  const {
+    showNewProjectModal,
+    setShowNewProjectModal,
+    addProject,
+    addProjectWithTemplate,
+  } = useZenStore();
+  const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState("");
   const [color, setColor] = useState(COLORS[0]);
   const [icon, setIcon] = useState("rocket");
+  const [templateId, setTemplateId] = useState<TemplateId>("web-app");
+  const [showPreview, setShowPreview] = useState(false);
 
   if (!showNewProjectModal) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleNext = () => {
+    if (step === 1 && name.trim()) {
+      setStep(2);
+    }
+  };
+
+  const handleBack = () => {
+    setStep(1);
+  };
+
+  const handleSubmit = () => {
     if (!name.trim()) return;
 
-    addProject(name.trim(), color, icon);
+    if (templateId === "blank") {
+      addProject(name.trim(), color, icon);
+    } else {
+      addProjectWithTemplate(name.trim(), color, icon, templateId);
+    }
+
+    // Reset
     setName("");
     setColor(COLORS[0]);
     setIcon("rocket");
+    setTemplateId("web-app");
+    setStep(1);
+    setShowPreview(false);
   };
+
+  const handleClose = () => {
+    setName("");
+    setColor(COLORS[0]);
+    setIcon("rocket");
+    setTemplateId("web-app");
+    setStep(1);
+    setShowPreview(false);
+    setShowNewProjectModal(false);
+  };
+
+  const totalTime = getTemplateEstimatedTime(templateId);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={() => setShowNewProjectModal(false)}
+        onClick={handleClose}
       />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-md p-6 mx-4 rounded-2xl bg-gray-900 border border-gray-800 shadow-2xl animate-scale-in">
+      <div className="relative z-10 w-full max-w-lg p-6 mx-4 rounded-2xl bg-gray-900 border border-gray-800 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold text-white mb-6">
-          Tạo Project mới
+          {step === 1 ? "🚀 Dự án mới - Bước 1/2" : "📂 Chọn Template - Bước 2/2"}
         </h2>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Name input */}
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">
-              Tên project
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ví dụ: SaaS Product"
-              className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder:text-gray-500 outline-none focus:border-cyan-500 transition-colors"
-              autoFocus
-            />
-          </div>
+        {step === 1 ? (
+          // STEP 1: Project Name, Color & Icon
+          <div className="space-y-5">
+            {/* Name input */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">
+                Tên project *
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Ví dụ: SaaS Product, Landing Page..."
+                className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder:text-gray-500 outline-none focus:border-cyan-500 transition-colors"
+                autoFocus
+              />
+            </div>
 
-          {/* Color picker */}
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">
-              Màu sắc
-            </label>
-            <div className="flex gap-2">
-              {COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  className={cn(
-                    "w-10 h-10 rounded-lg transition-all",
-                    color === c && "ring-2 ring-white ring-offset-2 ring-offset-gray-900"
-                  )}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
+            {/* Color picker */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">
+                Màu sắc
+              </label>
+              <div className="flex gap-2">
+                {COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setColor(c)}
+                    className={cn(
+                      "w-10 h-10 rounded-lg transition-all",
+                      color === c &&
+                        "ring-2 ring-white ring-offset-2 ring-offset-gray-900"
+                    )}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Icon picker */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">Icon</label>
+              <div className="flex gap-2">
+                {Object.entries(ICONS).map(([key, Icon]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setIcon(key)}
+                    className={cn(
+                      "w-10 h-10 rounded-lg flex items-center justify-center transition-all",
+                      icon === key
+                        ? "bg-gray-700 text-white"
+                        : "bg-gray-800 text-gray-400 hover:text-white"
+                    )}
+                  >
+                    <Icon className="w-5 h-5" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="flex-1 py-3 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={!name.trim()}
+                className="flex-1 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-medium hover:from-cyan-400 hover:to-purple-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Tiếp →
+              </button>
             </div>
           </div>
+        ) : (
+          // STEP 2: Template Selection
+          <div className="space-y-5">
+            <TemplateSelector value={templateId} onChange={setTemplateId} />
 
-          {/* Icon picker */}
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">
-              Icon
-            </label>
-            <div className="flex gap-2">
-              {Object.entries(ICONS).map(([key, Icon]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setIcon(key)}
-                  className={cn(
-                    "w-10 h-10 rounded-lg flex items-center justify-center transition-all",
-                    icon === key
-                      ? "bg-gray-700 text-white"
-                      : "bg-gray-800 text-gray-400 hover:text-white"
-                  )}
-                >
-                  <Icon className="w-5 h-5" />
-                </button>
-              ))}
+            {/* Preview Toggle */}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setShowPreview(!showPreview)}
+                className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
+              >
+                <ListTodo className="w-3 h-3" />
+                {showPreview ? "▼ Ẩn xem trước tasks" : "▶ Xem trước tasks"}
+              </button>
+              {totalTime > 0 && (
+                <span className="text-xs text-gray-500">
+                  Tổng: ~{formatMinutesToHours(totalTime)}
+                </span>
+              )}
+            </div>
+
+            {/* Preview */}
+            {showPreview && (
+              <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                <TemplatePreview templateId={templateId} />
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="flex-1 py-3 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
+              >
+                ← Quay lại
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                className="flex-1 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-medium hover:from-cyan-400 hover:to-purple-400 transition-colors"
+              >
+                Tạo dự án
+              </button>
             </div>
           </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowNewProjectModal(false)}
-              className="flex-1 py-3 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
-            >
-              Hủy
-            </button>
-            <button
-              type="submit"
-              disabled={!name.trim()}
-              className="flex-1 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-medium hover:from-cyan-400 hover:to-purple-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Tạo project
-            </button>
-          </div>
-        </form>
+        )}
       </div>
     </div>
   );
