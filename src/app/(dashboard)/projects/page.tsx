@@ -504,25 +504,33 @@ export default function ProjectsPage() {
     setIsModalOpen(true);
   };
 
-  const handleSaveProject = async (data: Partial<Project>) => {
-    if (!userId) return;
+  const handleSaveProject = async (data: Partial<Project>): Promise<boolean> => {
+    if (!userId) return false;
 
-    if (modalMode === "create") {
-      await createProject({
-        user_id: userId,
-        title: data.title || "Untitled",
-        description: data.description || null,
-        status: data.status || "active",
-        lifecycle: data.lifecycle || "idea",
-        health: "on-track",
-        is_focus: false,
-        progress: data.progress || 0,
-        deadline: data.deadline || null,
-        last_task: null,
-        current_task: data.current_task || null,
-      });
-    } else if (editingProject) {
-      await updateProjectInDb(editingProject.id, data);
+    try {
+      if (modalMode === "create") {
+        const result = await createProject({
+          user_id: userId,
+          title: data.title || "Untitled",
+          description: data.description || null,
+          status: data.status || "active",
+          lifecycle: data.lifecycle || "idea",
+          health: "on-track",
+          is_focus: false,
+          progress: data.progress || 0,
+          deadline: data.deadline || null,
+          last_task: null,
+          current_task: data.current_task || null,
+        });
+        return result !== null;
+      } else if (editingProject) {
+        await updateProjectInDb(editingProject.id, data);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Error saving project:", error);
+      return false;
     }
   };
 

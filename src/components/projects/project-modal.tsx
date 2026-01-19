@@ -26,7 +26,7 @@ type Lifecycle = "idea" | "designing" | "building" | "testing" | "shipped" | "pa
 interface ProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Partial<Project>) => void;
+  onSave: (data: Partial<Project>) => Promise<boolean>;
   project?: Project | null;
   mode: "create" | "edit";
 }
@@ -47,6 +47,8 @@ export function ProjectModal({ isOpen, onClose, onSave, project, mode }: Project
   const [deadline, setDeadline] = useState("");
   const [progress, setProgress] = useState(0);
   const [currentTask, setCurrentTask] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (project && mode === "edit") {
@@ -67,10 +69,13 @@ export function ProjectModal({ isOpen, onClose, onSave, project, mode }: Project
     }
   }, [project, mode, isOpen]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!title.trim()) return;
+
+    setIsSaving(true);
+    setError(null);
 
     const data: Partial<Project> = {
       title: title.trim(),
@@ -86,8 +91,18 @@ export function ProjectModal({ isOpen, onClose, onSave, project, mode }: Project
       data.id = project.id;
     }
 
-    onSave(data);
-    onClose();
+    try {
+      const success = await onSave(data);
+      if (success) {
+        onClose();
+      } else {
+        setError("Không thể lưu dự án. Vui lòng thử lại.");
+      }
+    } catch {
+      setError("Đã xảy ra lỗi. Vui lòng thử lại.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -192,13 +207,20 @@ export function ProjectModal({ isOpen, onClose, onSave, project, mode }: Project
             </div>
           )}
 
+          {/* Error message */}
+          {error && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1" disabled={isSaving}>
               Hủy
             </Button>
-            <Button type="submit" className="flex-1">
-              {mode === "create" ? "Tạo dự án" : "Lưu thay đổi"}
+            <Button type="submit" className="flex-1" disabled={isSaving}>
+              {isSaving ? "Đang lưu..." : mode === "create" ? "Tạo dự án" : "Lưu thay đổi"}
             </Button>
           </div>
         </form>
