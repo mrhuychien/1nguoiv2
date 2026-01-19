@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect } from "react";
-import { Target, Clock, ArrowRight, AlertTriangle, CheckCircle } from "lucide-react";
+import { Target, Clock, ArrowRight, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { useProjectStore, mockProjects, mockTasks } from "@/store/project-store";
+import { useProjectStore } from "@/store/project-store";
+import { useProjectData } from "@/hooks/use-project-data";
 
 const healthConfig = {
   "on-track": {
@@ -28,17 +28,20 @@ const healthConfig = {
 };
 
 export function FocusProject() {
-  const { projects, setProjects, setTasks, getFocusProject, getProjectTasks } = useProjectStore();
-
-  // Load mock data on mount
-  useEffect(() => {
-    if (projects.length === 0) {
-      setProjects(mockProjects);
-      setTasks(mockTasks);
-    }
-  }, [projects.length, setProjects, setTasks]);
+  const { isLoading } = useProjectData();
+  const { getFocusProject, getProjectTasks } = useProjectStore();
 
   const focusProject = getFocusProject();
+
+  if (isLoading) {
+    return (
+      <Card className="border-border border-dashed">
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-cyan" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (!focusProject) {
     return (

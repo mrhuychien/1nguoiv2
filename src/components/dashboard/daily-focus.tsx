@@ -1,14 +1,16 @@
 "use client";
 
-import { CheckCircle2, Circle, Plus, Star } from "lucide-react";
+import { CheckCircle2, Circle, Plus, Star, Loader2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { useProjectStore } from "@/store/project-store";
+import { useProjectData } from "@/hooks/use-project-data";
 
 export function DailyFocus() {
-  const { getDailyFocusTasks, toggleTaskComplete, projects } = useProjectStore();
+  const { isLoading } = useProjectData();
+  const { getDailyFocusTasks, toggleTaskCompleteInDb, projects } = useProjectStore();
   const dailyTasks = getDailyFocusTasks();
   const completedCount = dailyTasks.filter((t) => t.completed).length;
 
@@ -17,6 +19,16 @@ export function DailyFocus() {
     const project = projects.find((p) => p.id === projectId);
     return project?.title;
   };
+
+  if (isLoading) {
+    return (
+      <Card className="border-border h-fit">
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-warning" />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="border-border h-fit">
@@ -62,7 +74,7 @@ export function DailyFocus() {
                 >
                   <Checkbox
                     checked={task.completed}
-                    onCheckedChange={() => toggleTaskComplete(task.id)}
+                    onCheckedChange={() => toggleTaskCompleteInDb(task.id)}
                     className="mt-0.5"
                   />
                   <div className="flex-1 min-w-0">

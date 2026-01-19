@@ -1,16 +1,31 @@
 "use client";
 
 import { create } from "zustand";
-import { Project, Task } from "@/types/database.types";
+import { createClient } from "@/lib/supabase/client";
+import { Project, Task, ProjectInsert, TaskInsert } from "@/types/database.types";
 
 interface ProjectState {
   projects: Project[];
   tasks: Task[];
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | null;
 }
 
 interface ProjectActions {
+  // Supabase operations
+  fetchProjects: (userId: string) => Promise<void>;
+  fetchTasks: (userId: string) => Promise<void>;
+  createProject: (project: Omit<ProjectInsert, "id" | "created_at" | "updated_at">) => Promise<Project | null>;
+  updateProjectInDb: (id: string, updates: Partial<Project>) => Promise<void>;
+  deleteProjectFromDb: (id: string) => Promise<void>;
+  createTask: (task: Omit<TaskInsert, "id" | "created_at" | "updated_at">) => Promise<Task | null>;
+  updateTaskInDb: (id: string, updates: Partial<Task>) => Promise<void>;
+  deleteTaskFromDb: (id: string) => Promise<void>;
+  toggleTaskCompleteInDb: (id: string) => Promise<void>;
+  setFocusProjectInDb: (userId: string, projectId: string) => Promise<void>;
+
+  // Local state operations (for optimistic updates)
   setProjects: (projects: Project[]) => void;
   setTasks: (tasks: Task[]) => void;
   addProject: (project: Project) => void;
@@ -23,6 +38,7 @@ interface ProjectActions {
   setFocusProject: (id: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  reset: () => void;
 }
 
 interface ProjectGetters {
@@ -30,6 +46,7 @@ interface ProjectGetters {
   getActiveProjects: () => Project[];
   getDailyFocusTasks: () => Task[];
   getProjectTasks: (projectId: string) => Task[];
+  getProjectById: (id: string) => Project | undefined;
 }
 
 type ProjectStore = ProjectState & ProjectActions & ProjectGetters;
@@ -38,7 +55,240 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   projects: [],
   tasks: [],
   isLoading: false,
+  isInitialized: false,
   error: null,
+
+  // ========== SUPABASE OPERATIONS ==========
+
+  fetchProjects: async (userId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false });
+
+      if (error) throw error;
+      set({ projects: data || [], isInitialized: true });
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      set({ error: (error as Error).message });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  fetchTasks: async (userId: string) => {
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      set({ tasks: data || [] });
+    } catch (error) {
+      console.error("Error fetching tasks:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  createProject: async (projectData) => {
+    set({ isLoading: true, error: null });
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { data, error } = await supabaseAny
+        .from("projects")
+        .insert(projectData)
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        set((state) => ({ projects: [data, ...state.projects] }));
+      }
+      return data;
+    } catch (error) {
+      console.error("Error creating project:", error);
+      set({ error: (error as Error).message });
+      return null;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  updateProjectInDb: async (id: string, updates: Partial<Project>) => {
+    // Optimistic update
+    get().updateProject(id, updates);
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { error } = await supabaseAny
+        .from("projects")
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error updating project:", error);
+      set({ error: (error as Error).message });
+      // Revert on error - refetch
+      const { data: { user } } = await createClient().auth.getUser();
+      if (user) get().fetchProjects(user.id);
+    }
+  },
+
+  deleteProjectFromDb: async (id: string) => {
+    // Optimistic update
+    get().deleteProject(id);
+
+    try {
+      const supabase = createClient();
+      // Delete associated tasks first
+      await supabase.from("tasks").delete().eq("project_id", id);
+      // Then delete project
+      const { error } = await supabase.from("projects").delete().eq("id", id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error deleting project:", error);
+      set({ error: (error as Error).message });
+      // Revert on error - refetch
+      const { data: { user } } = await createClient().auth.getUser();
+      if (user) {
+        get().fetchProjects(user.id);
+        get().fetchTasks(user.id);
+      }
+    }
+  },
+
+  createTask: async (taskData) => {
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { data, error } = await supabaseAny
+        .from("tasks")
+        .insert(taskData)
+        .select()
+        .single();
+
+      if (error) throw error;
+      if (data) {
+        set((state) => ({ tasks: [data, ...state.tasks] }));
+      }
+      return data;
+    } catch (error) {
+      console.error("Error creating task:", error);
+      set({ error: (error as Error).message });
+      return null;
+    }
+  },
+
+  updateTaskInDb: async (id: string, updates: Partial<Task>) => {
+    // Optimistic update
+    get().updateTask(id, updates);
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { error } = await supabaseAny
+        .from("tasks")
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error updating task:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  deleteTaskFromDb: async (id: string) => {
+    // Optimistic update
+    get().deleteTask(id);
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { error } = await supabaseAny.from("tasks").delete().eq("id", id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  toggleTaskCompleteInDb: async (id: string) => {
+    const task = get().tasks.find((t) => t.id === id);
+    if (!task) return;
+
+    const newCompleted = !task.completed;
+    // Optimistic update
+    get().toggleTaskComplete(id);
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { error } = await supabaseAny
+        .from("tasks")
+        .update({
+          completed: newCompleted,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error toggling task:", error);
+      // Revert on error
+      get().toggleTaskComplete(id);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  setFocusProjectInDb: async (userId: string, projectId: string) => {
+    // Optimistic update
+    get().setFocusProject(projectId);
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      // First, unfocus all projects for this user
+      await supabaseAny
+        .from("projects")
+        .update({ is_focus: false })
+        .eq("user_id", userId);
+
+      // Then set the new focus project
+      const { error } = await supabaseAny
+        .from("projects")
+        .update({ is_focus: true, updated_at: new Date().toISOString() })
+        .eq("id", projectId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error setting focus project:", error);
+      set({ error: (error as Error).message });
+      // Refetch to revert
+      get().fetchProjects(userId);
+    }
+  },
+
+  // ========== LOCAL STATE OPERATIONS ==========
 
   setProjects: (projects) => set({ projects }),
   setTasks: (tasks) => set({ tasks }),
@@ -91,7 +341,16 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
 
-  // Getters
+  reset: () => set({
+    projects: [],
+    tasks: [],
+    isLoading: false,
+    isInitialized: false,
+    error: null
+  }),
+
+  // ========== GETTERS ==========
+
   getFocusProject: () => get().projects.find((p) => p.is_focus),
 
   getActiveProjects: () =>
@@ -106,6 +365,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
   getProjectTasks: (projectId) =>
     get().tasks.filter((t) => t.project_id === projectId),
+
+  getProjectById: (id) => get().projects.find((p) => p.id === id),
 }));
 
 // Mock data for demo - Project Lifecycle
