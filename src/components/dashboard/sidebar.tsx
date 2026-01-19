@@ -45,8 +45,14 @@ interface SidebarProps {
 
 export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
-  const { userInfo, signOut } = useUser();
+  const { userInfo, signOut, isLoading } = useUser();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Prevent hydration mismatch by only rendering user content after mount
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Close mobile sidebar when route changes
   useEffect(() => {
@@ -180,18 +186,18 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             )}
           >
             <Avatar className="h-9 w-9">
-              <AvatarImage src={userInfo?.avatarUrl || ""} />
+              {isMounted && <AvatarImage src={userInfo?.avatarUrl || ""} />}
               <AvatarFallback>
-                {getInitials(userInfo?.fullName || userInfo?.email || null)}
+                {isMounted ? getInitials(userInfo?.fullName || userInfo?.email || null) : "U"}
               </AvatarFallback>
             </Avatar>
             {(!isCollapsed || isMobileOpen) && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-text-primary truncate">
-                  {userInfo?.fullName || "User"}
+                  {isMounted && !isLoading ? (userInfo?.fullName || "User") : "Loading..."}
                 </p>
                 <p className="text-xs text-text-muted truncate">
-                  {userInfo?.email}
+                  {isMounted && !isLoading ? userInfo?.email : ""}
                 </p>
               </div>
             )}
@@ -203,6 +209,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                     size="icon"
                     onClick={handleSignOut}
                     className="flex-shrink-0"
+                    disabled={!isMounted}
                   >
                     <LogOut className="h-4 w-4" />
                   </Button>
@@ -219,6 +226,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                   size="icon"
                   onClick={handleSignOut}
                   className="w-full mt-2"
+                  disabled={!isMounted}
                 >
                   <LogOut className="h-4 w-4" />
                 </Button>
