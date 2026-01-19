@@ -23,7 +23,12 @@ export function useProjectData(options: UseProjectDataOptions = {}) {
   } = useProjectStore();
 
   useEffect(() => {
-    if (userLoading) return;
+    console.log("[ProjectData Debug] Effect running:", { userLoading, userId: user?.id, isInitialized, useMockData });
+
+    if (userLoading) {
+      console.log("[ProjectData Debug] User still loading, waiting...");
+      return;
+    }
 
     // If using mock data (for development/demo)
     if (useMockData) {
@@ -36,7 +41,10 @@ export function useProjectData(options: UseProjectDataOptions = {}) {
 
     // Fetch projects and tasks in parallel from Supabase
     if (user?.id && !isInitialized) {
+      console.log("[ProjectData Debug] Calling fetchAll for user:", user.id);
       fetchAll(user.id);
+    } else {
+      console.log("[ProjectData Debug] Not fetching:", { hasUserId: !!user?.id, isInitialized });
     }
   }, [user?.id, userLoading, useMockData, isInitialized, projects.length, fetchAll, setProjects, setTasks]);
 

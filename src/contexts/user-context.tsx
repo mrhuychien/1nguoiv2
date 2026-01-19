@@ -53,35 +53,41 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const supabase = createClient();
 
     const getInitialSession = async () => {
+      console.log("[Auth Debug] Starting getInitialSession...");
+
       // Add timeout to prevent hanging
       timeoutId = setTimeout(() => {
         if (isMounted) {
-          console.warn("Auth check timeout - proceeding without user");
+          console.warn("[Auth Debug] Auth check timeout - proceeding without user");
           setIsLoading(false);
           setIsInitialized(true);
         }
       }, 5000); // 5 second timeout
 
       try {
+        console.log("[Auth Debug] Calling getSession...");
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log("[Auth Debug] getSession result:", { hasSession: !!session, hasUser: !!session?.user, error: sessionError });
 
         if (timeoutId) clearTimeout(timeoutId);
         if (!isMounted) return;
 
         if (sessionError) {
-          console.error("Session error:", sessionError);
+          console.error("[Auth Debug] Session error:", sessionError);
           setIsLoading(false);
           setIsInitialized(true);
           return;
         }
 
         if (!session?.user) {
+          console.log("[Auth Debug] No session user, setting initialized");
           setIsLoading(false);
           setIsInitialized(true);
           return;
         }
 
         // Set user immediately from session
+        console.log("[Auth Debug] Setting user:", session.user.id, session.user.email);
         setUser(session.user);
         // Mark as initialized early so UI can render
         setIsLoading(false);
