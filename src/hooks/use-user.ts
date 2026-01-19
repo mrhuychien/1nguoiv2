@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 import { Profile } from "@/types/database.types";
@@ -17,8 +17,7 @@ export function useUser() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const isMountedRef = useRef(true);
-  const initAttemptedRef = useRef(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Computed user info that combines profile and auth metadata
   const getUserInfo = useCallback((authUser: User | null, userProfile: Profile | null): UserInfo | null => {
@@ -35,97 +34,63 @@ export function useUser() {
   }, []);
 
   useEffect(() => {
-    // Prevent double initialization in StrictMode
-    if (initAttemptedRef.current) return;
-    initAttemptedRef.current = true;
+    // Skip if already initialized
+    if (isInitialized) return;
 
-    isMountedRef.current = true;
+    let isMounted = true;
     const supabase = createClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const supabaseAny = supabase as any;
 
-    // Get initial session
     const getInitialSession = async () => {
       try {
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
 
-        // Check if component is still mounted
-        if (!isMountedRef.current) return;
+        if (!isMounted) return;
 
         if (authError) {
-          // Ignore abort errors - they're normal in React StrictMode
-          if (authError.name === 'AbortError' ||
-              authError.message?.includes('aborted') ||
-              authError.message?.includes('AbortError')) {
+          // Ignore abort errors
+          if (authError.name === 'AbortError' || authError.message?.includes('aborted')) {
             setIsLoading(false);
+            setIsInitialized(true);
             return;
           }
-          console.error("Error getting user:", authError);
+          console.error("Auth error:", authError);
           setError(authError);
           setIsLoading(false);
+          setIsInitialized(true);
           return;
         }
 
-        setUser(user);
+        setUser(authUser);
 
-        if (user) {
-          // Fetch profile
+        if (authUser) {
           try {
-            const { data: profileData, error: profileError } = await supabaseAny
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const supabaseAny = supabase as any;
+            const { data: profileData } = await supabaseAny
               .from("profiles")
               .select("*")
-              .eq("id", user.id)
+              .eq("id", authUser.id)
               .single();
 
-            if (!isMountedRef.current) return;
-
-            if (profileError && profileError.code !== 'PGRST116') {
-              // PGRST116 = no rows returned, which is expected if profile doesn't exist
-              console.error("Error fetching profile:", profileError);
-            }
-
-            if (profileData) {
+            if (isMounted && profileData) {
               setProfile(profileData);
-            } else {
-              // If no profile exists, create one with auth metadata
-              const metadata = user.user_metadata;
-              const newProfile = {
-                id: user.id,
-                email: user.email,
-                full_name: metadata?.full_name || metadata?.name || null,
-                avatar_url: metadata?.avatar_url || metadata?.picture || null,
-              };
-
-              const { data: createdProfile } = await supabaseAny
-                .from("profiles")
-                .insert(newProfile)
-                .select()
-                .single();
-
-              if (isMountedRef.current && createdProfile) {
-                setProfile(createdProfile);
-              }
             }
-          } catch (profileErr) {
-            // Profile fetch errors shouldn't block the user session
-            console.error("Profile error:", profileErr);
+          } catch (err) {
+            console.error("Profile fetch error:", err);
           }
         }
       } catch (err) {
-        // Ignore abort errors
-        if (err instanceof Error) {
-          if (err.name === 'AbortError' || err.message?.includes('aborted')) {
-            setIsLoading(false);
-            return;
-          }
-        }
-        if (isMountedRef.current) {
-          console.error("Error in getInitialSession:", err);
+        if (!isMounted) return;
+        if (err instanceof Error && (err.name === 'AbortError' || err.message?.includes('aborted'))) {
+          // Ignore abort errors
+        } else {
+          console.error("Session error:", err);
           setError(err instanceof Error ? err : new Error('Unknown error'));
         }
       } finally {
-        if (isMountedRef.current) {
+        if (isMounted) {
           setIsLoading(false);
+          setIsInitialized(true);
         }
       }
     };
@@ -135,85 +100,61 @@ export function useUser() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!isMountedRef.current) return;
+        if (!isMounted) return;
 
-        // Handle sign out event
         if (event === 'SIGNED_OUT') {
           setUser(null);
           setProfile(null);
           return;
         }
 
-        setUser(session?.user ?? null);
+        if (event === 'SIGNED_IN' && session?.user) {
+          setUser(session.user);
 
-        if (session?.user) {
           try {
-            // Fetch profile on sign in
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const supabaseAny = supabase as any;
             const { data: profileData } = await supabaseAny
               .from("profiles")
               .select("*")
               .eq("id", session.user.id)
               .single();
 
-            if (!isMountedRef.current) return;
-
-            if (profileData) {
+            if (isMounted && profileData) {
               setProfile(profileData);
-            } else {
-              // Create profile if doesn't exist
-              const metadata = session.user.user_metadata;
-              const newProfile = {
-                id: session.user.id,
-                email: session.user.email,
-                full_name: metadata?.full_name || metadata?.name || null,
-                avatar_url: metadata?.avatar_url || metadata?.picture || null,
-              };
-
-              const { data: createdProfile } = await supabaseAny
-                .from("profiles")
-                .insert(newProfile)
-                .select()
-                .single();
-
-              if (isMountedRef.current && createdProfile) {
-                setProfile(createdProfile);
-              }
             }
           } catch (err) {
-            console.error("Error in auth state change:", err);
+            console.error("Profile fetch on sign in:", err);
           }
-        } else {
-          setProfile(null);
         }
       }
     );
 
     return () => {
-      isMountedRef.current = false;
+      isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [isInitialized]);
 
   const signOut = useCallback(async () => {
     try {
       const supabase = createClient();
-      const { error: signOutError } = await supabase.auth.signOut();
+      await supabase.auth.signOut();
 
-      if (signOutError) {
-        console.error("Sign out error:", signOutError);
-        throw signOutError;
-      }
-
-      // Clear local state
+      // Clear state first
       setUser(null);
       setProfile(null);
 
-      // Redirect to login page
-      window.location.href = '/login';
+      // Then redirect
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     } catch (err) {
-      console.error("Error signing out:", err);
-      // Force redirect even if error
-      window.location.href = '/login';
+      console.error("Sign out error:", err);
+      // Force redirect even on error
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     }
   }, []);
 
