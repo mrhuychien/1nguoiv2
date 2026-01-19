@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo } from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import { cn } from "@/lib/utils";
 import { useIdeaStore } from "@/store/idea-store";
@@ -9,20 +9,25 @@ interface NodeData {
   title: string;
   description: string | null;
   color: string;
+  connectionCount?: number;
 }
 
 function CustomNodeComponent({ id, data, selected }: NodeProps<NodeData>) {
   const selectNode = useIdeaStore((state) => state.selectNode);
-  const [isHovered, setIsHovered] = useState(false);
+  const selectedNodeId = useIdeaStore((state) => state.selectedNodeId);
 
-  const nodeSize = selected ? 20 : isHovered ? 18 : 14;
-  const glowIntensity = selected ? 0.8 : isHovered ? 0.5 : 0.3;
+  // Obsidian-style: node size based on connection count
+  const connectionCount = data.connectionCount || 1;
+  const baseSize = 8;
+  const maxSize = 24;
+  const nodeSize = Math.min(baseSize + connectionCount * 3, maxSize);
+
+  const isActive = selected || selectedNodeId === id;
+  const opacity = isActive ? 1 : 0.85;
 
   return (
     <div
-      className="relative flex flex-col items-center"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      className="relative flex flex-col items-center cursor-pointer group"
       onClick={() => selectNode(id)}
     >
       {/* Hidden handles for connections */}
@@ -37,77 +42,59 @@ function CustomNodeComponent({ id, data, selected }: NodeProps<NodeData>) {
         className="!opacity-0 !w-full !h-full !bottom-0 !left-0 !transform-none !rounded-full !border-0 !bg-transparent"
       />
 
-      {/* Glow effect */}
+      {/* Obsidian-style glow effect - subtle and smooth */}
       <div
-        className="absolute rounded-full transition-all duration-300 ease-out"
+        className="absolute rounded-full transition-all duration-500 ease-out"
         style={{
-          width: nodeSize * 3,
-          height: nodeSize * 3,
+          width: nodeSize * 2.5,
+          height: nodeSize * 2.5,
           backgroundColor: data.color,
-          opacity: glowIntensity * 0.15,
-          filter: `blur(${nodeSize}px)`,
+          opacity: isActive ? 0.25 : 0.1,
+          filter: `blur(${nodeSize * 0.8}px)`,
           transform: "translate(-50%, -50%)",
           left: "50%",
           top: "50%",
         }}
       />
 
-      {/* Outer ring (shows on hover/selected) */}
+      {/* Main circular node - Obsidian style filled circle */}
       <div
         className={cn(
-          "absolute rounded-full transition-all duration-300 ease-out border-2",
-          (selected || isHovered) ? "opacity-100" : "opacity-0"
-        )}
-        style={{
-          width: nodeSize + 10,
-          height: nodeSize + 10,
-          borderColor: data.color,
-          transform: "translate(-50%, -50%)",
-          left: "50%",
-          top: "50%",
-        }}
-      />
-
-      {/* Main circular node */}
-      <div
-        className={cn(
-          "rounded-full cursor-pointer transition-all duration-300 ease-out",
-          "border-2 border-transparent"
+          "rounded-full transition-all duration-300 ease-out",
+          "hover:scale-110"
         )}
         style={{
           width: nodeSize,
           height: nodeSize,
           backgroundColor: data.color,
-          boxShadow: `0 0 ${nodeSize * 2}px ${data.color}${Math.round(glowIntensity * 255).toString(16).padStart(2, '0')}`,
+          opacity: opacity,
+          boxShadow: isActive
+            ? `0 0 ${nodeSize}px ${data.color}80, 0 0 ${nodeSize * 2}px ${data.color}40`
+            : `0 0 ${nodeSize * 0.5}px ${data.color}30`,
         }}
       />
 
-      {/* Label (shows on hover or selected) */}
+      {/* Label - Obsidian style: always visible, below node */}
       <div
         className={cn(
           "absolute whitespace-nowrap text-center transition-all duration-300 ease-out pointer-events-none",
-          (selected || isHovered) ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1"
+          isActive ? "opacity-100" : "opacity-70 group-hover:opacity-100"
         )}
         style={{
-          top: nodeSize / 2 + 12,
-          maxWidth: 150,
+          top: nodeSize / 2 + 8,
         }}
       >
-        <div
-          className="px-2 py-1 rounded-md text-xs font-medium"
+        <span
+          className={cn(
+            "text-[11px] font-medium tracking-wide",
+            isActive ? "text-white" : "text-gray-400 group-hover:text-gray-200"
+          )}
           style={{
-            backgroundColor: `${data.color}20`,
-            color: data.color,
-            border: `1px solid ${data.color}40`,
+            textShadow: "0 1px 3px rgba(0,0,0,0.8)",
           }}
         >
           {data.title}
-        </div>
-        {isHovered && data.description && (
-          <div className="mt-1 px-2 py-1 rounded-md text-xs text-text-muted bg-background-secondary/90 border border-border max-w-[150px] truncate">
-            {data.description}
-          </div>
-        )}
+        </span>
       </div>
     </div>
   );

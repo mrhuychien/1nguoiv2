@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactFlow, {
   Background,
-  MiniMap,
   Node,
   Edge,
   Connection,
@@ -13,7 +12,6 @@ import ReactFlow, {
   BackgroundVariant,
   OnNodesChange,
   ConnectionLineType,
-  MarkerType,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { CustomNode } from "./custom-node";
@@ -24,12 +22,9 @@ const nodeTypes: NodeTypes = {
   custom: CustomNode,
 };
 
-// Custom edge style for Obsidian-like appearance
-const getEdgeStyle = (sourceColor: string, isHighlighted: boolean) => ({
-  stroke: isHighlighted ? sourceColor : `${sourceColor}60`,
-  strokeWidth: isHighlighted ? 2.5 : 1.5,
-  transition: "stroke 0.3s ease, stroke-width 0.3s ease",
-});
+// Obsidian-style edge colors
+const EDGE_COLOR_DEFAULT = "rgba(136, 136, 136, 0.3)";
+const EDGE_COLOR_CONNECTED = "rgba(200, 200, 200, 0.8)";
 
 export function Canvas() {
   const {
@@ -47,14 +42,18 @@ export function Canvas() {
 
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
-  // Get node color map
-  const nodeColorMap = useMemo(() => {
-    const map: Record<string, string> = {};
+  // Calculate connection count for each node
+  const connectionCountMap = useMemo(() => {
+    const map: Record<string, number> = {};
     storeNodes.forEach((node) => {
-      map[node.id] = node.color;
+      map[node.id] = 0;
+    });
+    storeLinks.forEach((link) => {
+      if (map[link.source_id] !== undefined) map[link.source_id]++;
+      if (map[link.target_id] !== undefined) map[link.target_id]++;
     });
     return map;
-  }, [storeNodes]);
+  }, [storeNodes, storeLinks]);
 
   // Convert store data to React Flow format
   const initialNodes: Node[] = useMemo(
@@ -67,35 +66,48 @@ export function Canvas() {
           title: node.title,
           description: node.description,
           color: node.color,
+          connectionCount: connectionCountMap[node.id] || 1,
         },
         selected: node.id === selectedNodeId,
       })),
-    [storeNodes, selectedNodeId]
+    [storeNodes, selectedNodeId, connectionCountMap]
   );
 
+  // Obsidian-style edges: gray, no arrows, subtle
   const initialEdges: Edge[] = useMemo(
     () =>
       storeLinks.map((link) => {
         const activeId = hoveredNodeId || selectedNodeId;
-        const isHighlighted = activeId === link.source_id || activeId === link.target_id;
-        const sourceColor = nodeColorMap[link.source_id] || "#00d4ff";
+        const isConnectedToActive =
+          activeId === link.source_id || activeId === link.target_id;
+
+        let strokeColor = EDGE_COLOR_DEFAULT;
+        let strokeWidth = 1;
+
+        if (activeId) {
+          if (isConnectedToActive) {
+            strokeColor = EDGE_COLOR_CONNECTED;
+            strokeWidth = 1.5;
+          } else {
+            strokeColor = "rgba(136, 136, 136, 0.1)";
+            strokeWidth = 0.5;
+          }
+        }
 
         return {
           id: link.id,
           source: link.source_id,
           target: link.target_id,
           type: "default",
-          style: getEdgeStyle(sourceColor, isHighlighted),
-          animated: isHighlighted,
-          markerEnd: {
-            type: MarkerType.Arrow,
-            width: 15,
-            height: 15,
-            color: isHighlighted ? sourceColor : `${sourceColor}60`,
+          style: {
+            stroke: strokeColor,
+            strokeWidth: strokeWidth,
+            transition: "stroke 0.3s ease, stroke-width 0.3s ease",
           },
+          // No arrows - Obsidian style
         };
       }),
-    [storeLinks, hoveredNodeId, selectedNodeId, nodeColorMap]
+    [storeLinks, hoveredNodeId, selectedNodeId]
   );
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -214,43 +226,31 @@ export function Canvas() {
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
         nodeTypes={nodeTypes}
-        connectionLineType={ConnectionLineType.SmoothStep}
-        connectionLineStyle={{ stroke: "#00d4ff", strokeWidth: 2 }}
+        connectionLineType={ConnectionLineType.Straight}
+        connectionLineStyle={{ stroke: "rgba(136, 136, 136, 0.5)", strokeWidth: 1 }}
         fitView
-        fitViewOptions={{ padding: 0.3 }}
+        fitViewOptions={{ padding: 0.4 }}
         minZoom={0.1}
-        maxZoom={3}
+        maxZoom={4}
         defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         proOptions={{ hideAttribution: true }}
-        className="bg-background"
         style={{
-          background: "radial-gradient(circle at 50% 50%, #1a1a2e 0%, #0a0a0f 100%)"
+          background: "#0a0a0f",
         }}
       >
+        {/* Obsidian uses very subtle or no background pattern */}
         <Background
           variant={BackgroundVariant.Dots}
-          gap={30}
-          size={1}
-          color="#2a2a3c40"
+          gap={50}
+          size={0.5}
+          color="rgba(255, 255, 255, 0.03)"
         />
         <Toolbar />
-        <MiniMap
-          nodeColor={(node) => node.data?.color || "#00d4ff"}
-          nodeStrokeColor={(node) => node.data?.color || "#00d4ff"}
-          nodeStrokeWidth={2}
-          maskColor="rgba(10, 10, 15, 0.9)"
-          style={{
-            backgroundColor: "#0a0a0f",
-            border: "1px solid #2a2a3c",
-            borderRadius: "8px",
-          }}
-          className="!bottom-4 !right-4"
-        />
       </ReactFlow>
 
-      {/* Graph stats overlay */}
-      <div className="absolute bottom-4 left-4 px-3 py-2 bg-background-secondary/80 backdrop-blur-sm rounded-lg border border-border text-xs text-text-muted">
-        <span className="text-cyan">{storeNodes.length}</span> nodes · <span className="text-purple">{storeLinks.length}</span> connections
+      {/* Graph stats overlay - Obsidian style */}
+      <div className="absolute bottom-4 left-4 px-3 py-1.5 bg-black/60 backdrop-blur-sm rounded text-[11px] text-gray-500">
+        {storeNodes.length} nodes · {storeLinks.length} connections
       </div>
     </div>
   );

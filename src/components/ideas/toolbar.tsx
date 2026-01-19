@@ -26,25 +26,26 @@ export function Toolbar() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-        <div className="flex flex-col gap-1 p-1 rounded-lg border border-border bg-background-secondary/90 backdrop-blur-sm">
+      {/* Obsidian-style minimal toolbar */}
+      <div className="absolute top-4 right-4 z-10 flex flex-col gap-1">
+        <div className="flex flex-col gap-0.5 p-1.5 rounded-lg bg-black/50 backdrop-blur-sm border border-white/10">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={handleAddNode}
-                className="h-9 w-9"
+                className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/10"
               >
                 <Plus className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">
+            <TooltipContent side="left" className="bg-black/80 border-white/10 text-gray-200">
               Thêm node (N)
             </TooltipContent>
           </Tooltip>
 
-          <div className="h-px bg-border mx-1" />
+          <div className="h-px bg-white/10 mx-1" />
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -52,12 +53,12 @@ export function Toolbar() {
                 variant="ghost"
                 size="icon"
                 onClick={() => zoomIn()}
-                className="h-9 w-9"
+                className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/10"
               >
                 <ZoomIn className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">
+            <TooltipContent side="left" className="bg-black/80 border-white/10 text-gray-200">
               Phóng to
             </TooltipContent>
           </Tooltip>
@@ -68,12 +69,12 @@ export function Toolbar() {
                 variant="ghost"
                 size="icon"
                 onClick={() => zoomOut()}
-                className="h-9 w-9"
+                className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/10"
               >
                 <ZoomOut className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">
+            <TooltipContent side="left" className="bg-black/80 border-white/10 text-gray-200">
               Thu nhỏ
             </TooltipContent>
           </Tooltip>
@@ -83,32 +84,32 @@ export function Toolbar() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => fitView({ padding: 0.2 })}
-                className="h-9 w-9"
+                onClick={() => fitView({ padding: 0.3 })}
+                className="h-8 w-8 text-gray-400 hover:text-white hover:bg-white/10"
               >
                 <Maximize2 className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">
-              Fit view (F)
+            <TooltipContent side="left" className="bg-black/80 border-white/10 text-gray-200">
+              Fit view
             </TooltipContent>
           </Tooltip>
 
           {selectedNodeId && (
             <>
-              <div className="h-px bg-border mx-1" />
+              <div className="h-px bg-white/10 mx-1" />
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={handleDelete}
-                    className="h-9 w-9 text-danger hover:text-danger"
+                    className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="right">
+                <TooltipContent side="left" className="bg-black/80 border-white/10 text-gray-200">
                   Xóa node (Delete)
                 </TooltipContent>
               </Tooltip>
