@@ -1,11 +1,32 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Play } from "lucide-react";
+import { ArrowRight, Play, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 export function HeroSection() {
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
       {/* Background gradient */}
@@ -65,12 +86,21 @@ export function HeroSection() {
             transition={{ delay: 0.4 }}
             className="flex flex-col sm:flex-row gap-4 justify-center items-center"
           >
-            <Button size="xl" asChild>
-              <Link href="/signup">
-                Bắt đầu miễn phí
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
+            {user ? (
+              <Button size="xl" asChild>
+                <Link href="/dashboard">
+                  <LayoutDashboard className="mr-2 h-5 w-5" />
+                  Đi tới Dashboard
+                </Link>
+              </Button>
+            ) : (
+              <Button size="xl" asChild>
+                <Link href="/signup">
+                  Bắt đầu miễn phí
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+            )}
             <Button size="xl" variant="outline" asChild>
               <a href="#tools">
                 <Play className="mr-2 h-5 w-5" />

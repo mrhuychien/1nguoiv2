@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
+import { Menu, X, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
+import type { User } from "@supabase/supabase-js";
 
 const navLinks = [
   { href: "#pillars", label: "Tính năng" },
@@ -15,6 +17,27 @@ const navLinks = [
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 glass">
@@ -45,12 +68,25 @@ export function Navbar() {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-3">
-            <Button variant="ghost" asChild>
-              <Link href="/login">Đăng nhập</Link>
-            </Button>
-            <Button asChild>
-              <Link href="/signup">Bắt đầu miễn phí</Link>
-            </Button>
+            {isLoading ? (
+              <div className="h-9 w-32 bg-background-secondary animate-pulse rounded-lg" />
+            ) : user ? (
+              <Button asChild>
+                <Link href="/dashboard">
+                  <LayoutDashboard className="mr-2 h-4 w-4" />
+                  Dashboard
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" asChild>
+                  <Link href="/login">Đăng nhập</Link>
+                </Button>
+                <Button asChild>
+                  <Link href="/signup">Bắt đầu miễn phí</Link>
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -85,12 +121,23 @@ export function Navbar() {
                 </a>
               ))}
               <div className="pt-4 border-t border-border space-y-3">
-                <Button variant="outline" className="w-full" asChild>
-                  <Link href="/login">Đăng nhập</Link>
-                </Button>
-                <Button className="w-full" asChild>
-                  <Link href="/signup">Bắt đầu miễn phí</Link>
-                </Button>
+                {user ? (
+                  <Button className="w-full" asChild>
+                    <Link href="/dashboard">
+                      <LayoutDashboard className="mr-2 h-4 w-4" />
+                      Dashboard
+                    </Link>
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="outline" className="w-full" asChild>
+                      <Link href="/login">Đăng nhập</Link>
+                    </Button>
+                    <Button className="w-full" asChild>
+                      <Link href="/signup">Bắt đầu miễn phí</Link>
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
           </motion.div>
