@@ -194,7 +194,9 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             {(!isCollapsed || isMobileOpen) && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-text-primary truncate">
-                  {isMounted && !isLoading ? (userInfo?.fullName || "User") : "Loading..."}
+                  {isMounted && !isLoading
+                    ? (userInfo?.fullName || userInfo?.email?.split('@')[0] || "User")
+                    : "..."}
                 </p>
                 <p className="text-xs text-text-muted truncate">
                   {isMounted && !isLoading ? userInfo?.email : ""}
