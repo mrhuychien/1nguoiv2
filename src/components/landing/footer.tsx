@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 const footerLinks = {
@@ -33,7 +34,11 @@ const footerLinks = {
 };
 
 export function Footer() {
-  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState(2024); // Default year for SSR
+
+  useEffect(() => {
+    setYear(new Date().getFullYear());
+  }, []);
 
   return (
     <footer className="bg-background-secondary border-t border-border">
@@ -104,7 +109,7 @@ export function Footer() {
         {/* Bottom */}
         <div className="py-6 border-t border-border flex flex-col sm:flex-row justify-between items-center gap-4">
           <p className="text-sm text-text-muted">
-            &copy; {currentYear} 1nguoi.com. All rights reserved.
+            &copy; {year} 1nguoi.com. All rights reserved.
           </p>
           <p className="text-sm text-text-muted">
             Made with care for Solopreneurs in Vietnam
