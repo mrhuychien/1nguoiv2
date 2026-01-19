@@ -25,6 +25,8 @@ interface IdeaState {
   graphId: string | null;
   isLoading: boolean;
   error: string | null;
+  searchQuery: string;
+  searchResults: string[];
 }
 
 interface IdeaActions {
@@ -47,6 +49,10 @@ interface IdeaActions {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;
+
+  // Search
+  setSearchQuery: (query: string) => void;
+  clearSearch: () => void;
 }
 
 interface IdeaGetters {
@@ -63,6 +69,8 @@ const initialState: IdeaState = {
   graphId: null,
   isLoading: false,
   error: null,
+  searchQuery: "",
+  searchResults: [],
 };
 
 export const useIdeaStore = create<IdeaStore>((set, get) => ({
@@ -159,6 +167,28 @@ export const useIdeaStore = create<IdeaStore>((set, get) => ({
   setError: (error) => set({ error }),
 
   reset: () => set(initialState),
+
+  setSearchQuery: (query) => {
+    const { nodes } = get();
+    const normalizedQuery = query.toLowerCase().trim();
+
+    if (!normalizedQuery) {
+      set({ searchQuery: "", searchResults: [] });
+      return;
+    }
+
+    const results = nodes
+      .filter(
+        (node) =>
+          node.title.toLowerCase().includes(normalizedQuery) ||
+          (node.description && node.description.toLowerCase().includes(normalizedQuery))
+      )
+      .map((node) => node.id);
+
+    set({ searchQuery: query, searchResults: results });
+  },
+
+  clearSearch: () => set({ searchQuery: "", searchResults: [] }),
 
   // Getters
   getSelectedNode: () => {

@@ -9,12 +9,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUser } from "@/hooks/use-user";
 import { createClient } from "@/lib/supabase/client";
 import { User, Mail, Bell, Shield, Loader2, Check } from "lucide-react";
+import { ChangePasswordModal } from "@/components/settings/change-password-modal";
 
 export default function SettingsPage() {
   const { userInfo, signOut, user } = useUser();
   const [fullName, setFullName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   useEffect(() => {
     if (userInfo?.fullName) {
@@ -171,7 +173,11 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 md:p-6 pt-0 space-y-4">
-          <Button variant="outline" className="w-full sm:w-auto">
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => setIsPasswordModalOpen(true)}
+          >
             Đổi mật khẩu
           </Button>
           <div className="pt-4 border-t border-border">
@@ -181,6 +187,12 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+      />
     </div>
   );
 }

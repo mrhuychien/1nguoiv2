@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import * as d3 from "d3";
+import { Search, X } from "lucide-react";
 import { useIdeaStore, mockNodes, mockLinks } from "@/store/idea-store";
 
 interface D3Node extends d3.SimulationNodeDatum {
@@ -23,8 +24,10 @@ export function Canvas() {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<D3Node, D3Link> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [connectMode, setConnectMode] = useState(false);
   const [connectSourceId, setConnectSourceId] = useState<string | null>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const {
     nodes: storeNodes,
@@ -36,6 +39,10 @@ export function Canvas() {
     deleteNode,
     selectNode,
     selectedNodeId,
+    searchQuery,
+    searchResults,
+    setSearchQuery,
+    clearSearch,
   } = useIdeaStore();
 
   // Load mock data on mount
@@ -203,10 +210,37 @@ export function Canvas() {
         }
       });
 
-    // Highlight selected node
+    // Highlight selected node and search results
     node.select(".node-circle")
-      .attr("stroke", (d) => d.id === selectedNodeId ? "#fff" : "none")
-      .attr("stroke-width", (d) => d.id === selectedNodeId ? 2 : 0);
+      .attr("stroke", (d) => {
+        if (d.id === selectedNodeId) return "#fff";
+        if (searchResults.length > 0 && searchResults.includes(d.id)) return "#fbbf24";
+        return "none";
+      })
+      .attr("stroke-width", (d) => {
+        if (d.id === selectedNodeId) return 2;
+        if (searchResults.length > 0 && searchResults.includes(d.id)) return 3;
+        return 0;
+      })
+      .attr("opacity", (d) => {
+        // Dim non-matching nodes when searching
+        if (searchResults.length > 0 && !searchResults.includes(d.id)) return 0.3;
+        return 0.9;
+      });
+
+    // Dim non-matching labels
+    node.select(".node-label")
+      .attr("opacity", (d) => {
+        if (searchResults.length > 0 && !searchResults.includes(d.id)) return 0.2;
+        return 1;
+      });
+
+    // Dim glow for non-matching nodes
+    node.select(".glow")
+      .attr("opacity", (d) => {
+        if (searchResults.length > 0 && !searchResults.includes(d.id)) return 0.05;
+        return 0.15;
+      });
 
     // Node labels
     node.append("text")
@@ -278,7 +312,7 @@ export function Canvas() {
     return () => {
       simulation.stop();
     };
-  }, [storeNodes, storeLinks, selectedNodeId, addNode, addLink, selectNode, connectMode, connectSourceId]);
+  }, [storeNodes, storeLinks, selectedNodeId, addNode, addLink, selectNode, connectMode, connectSourceId, searchResults]);
 
   // Reheat simulation
   const reheat = useCallback(() => {
@@ -295,9 +329,28 @@ export function Canvas() {
     }
   }, [selectedNodeId]);
 
+  // Toggle search
+  const toggleSearch = useCallback(() => {
+    setIsSearchOpen((prev) => {
+      if (!prev) {
+        setTimeout(() => searchInputRef.current?.focus(), 100);
+      } else {
+        clearSearch();
+      }
+      return !prev;
+    });
+  }, [clearSearch]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Handle Cmd/Ctrl + F for search
+      if ((event.metaKey || event.ctrlKey) && event.key === "f") {
+        event.preventDefault();
+        toggleSearch();
+        return;
+      }
+
       if (
         event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement
@@ -317,9 +370,14 @@ export function Canvas() {
           }
           break;
         case "escape":
-          selectNode(null);
-          setConnectMode(false);
-          setConnectSourceId(null);
+          if (isSearchOpen) {
+            setIsSearchOpen(false);
+            clearSearch();
+          } else {
+            selectNode(null);
+            setConnectMode(false);
+            setConnectSourceId(null);
+          }
           break;
         case "c":
           // Press C to enter connect mode
@@ -332,11 +390,51 @@ export function Canvas() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [reheat, selectedNodeId, deleteNode, selectNode, startConnectMode]);
+  }, [reheat, selectedNodeId, deleteNode, selectNode, startConnectMode, isSearchOpen, clearSearch, toggleSearch]);
 
   return (
     <div ref={containerRef} className="w-full h-full relative bg-[#0a0a0f]">
       <svg ref={svgRef} className="w-full h-full" />
+
+      {/* Search Bar */}
+      <div className="absolute top-4 left-4 flex items-center gap-2">
+        {isSearchOpen ? (
+          <div className="flex items-center gap-2 bg-black/70 backdrop-blur-sm border border-white/20 rounded-lg px-3 py-2">
+            <Search className="h-4 w-4 text-gray-400" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Tìm kiếm node..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="bg-transparent text-white text-sm placeholder-gray-500 outline-none w-48"
+            />
+            {searchQuery && (
+              <span className="text-xs text-yellow-400">
+                {searchResults.length} kết quả
+              </span>
+            )}
+            <button
+              onClick={() => {
+                setIsSearchOpen(false);
+                clearSearch();
+              }}
+              className="text-gray-400 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={toggleSearch}
+            className="flex items-center gap-2 bg-black/50 backdrop-blur-sm border border-white/10 rounded-lg px-3 py-2 text-gray-400 hover:text-white hover:border-white/20 transition-colors"
+            title="Tìm kiếm (Ctrl/Cmd + F)"
+          >
+            <Search className="h-4 w-4" />
+            <span className="text-xs">Tìm kiếm</span>
+          </button>
+        )}
+      </div>
 
       {/* Connect mode indicator */}
       {connectMode && (

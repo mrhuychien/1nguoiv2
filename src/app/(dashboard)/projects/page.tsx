@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useProjectStore, mockProjects, mockTasks } from "@/store/project-store";
+import { useProjectStore } from "@/store/project-store";
+import { useProjectData } from "@/hooks/use-project-data";
 import { ProjectModal } from "@/components/projects/project-modal";
 import { Project } from "@/types/database.types";
-import { generateId } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
 import {
   Plus,
   MoreHorizontal,
@@ -483,18 +484,12 @@ function PausedCard({
 }
 
 export default function ProjectsPage() {
-  const { projects, setProjects, setTasks, addProject, updateProject, deleteProject } = useProjectStore();
+  const { projects, isLoading, userId } = useProjectData();
+  const { createProject, updateProjectInDb, deleteProjectFromDb } = useProjectStore();
   const [filter, setFilter] = useState<LifecycleFilter>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [modalMode, setModalMode] = useState<"create" | "edit">("create");
-
-  useEffect(() => {
-    if (projects.length === 0) {
-      setProjects(mockProjects);
-      setTasks(mockTasks);
-    }
-  }, [projects.length, setProjects, setTasks]);
 
   // Handlers
   const handleCreateProject = () => {
@@ -509,11 +504,12 @@ export default function ProjectsPage() {
     setIsModalOpen(true);
   };
 
-  const handleSaveProject = (data: Partial<Project>) => {
+  const handleSaveProject = async (data: Partial<Project>) => {
+    if (!userId) return;
+
     if (modalMode === "create") {
-      const newProject: Project = {
-        id: generateId(),
-        user_id: "user-1",
+      await createProject({
+        user_id: userId,
         title: data.title || "Untitled",
         description: data.description || null,
         status: data.status || "active",
@@ -524,52 +520,52 @@ export default function ProjectsPage() {
         deadline: data.deadline || null,
         last_task: null,
         current_task: data.current_task || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      addProject(newProject);
-    } else if (editingProject) {
-      updateProject(editingProject.id, {
-        ...data,
-        updated_at: new Date().toISOString(),
       });
+    } else if (editingProject) {
+      await updateProjectInDb(editingProject.id, data);
     }
   };
 
-  const handleDeleteProject = (id: string) => {
+  const handleDeleteProject = async (id: string) => {
     if (confirm("Bạn có chắc muốn xóa dự án này?")) {
-      deleteProject(id);
+      await deleteProjectFromDb(id);
     }
   };
 
-  const handleMoveToNextStage = (project: Project) => {
+  const handleMoveToNextStage = async (project: Project) => {
     const config = lifecycleConfig[project.lifecycle];
     if (config.next) {
-      updateProject(project.id, {
+      await updateProjectInDb(project.id, {
         lifecycle: config.next,
         status: config.next === "shipped" ? "completed" : "active",
         last_task: project.current_task,
         current_task: null,
-        updated_at: new Date().toISOString(),
       });
     }
   };
 
-  const handlePauseProject = (project: Project) => {
-    updateProject(project.id, {
+  const handlePauseProject = async (project: Project) => {
+    await updateProjectInDb(project.id, {
       lifecycle: "paused",
       status: "archived",
-      updated_at: new Date().toISOString(),
     });
   };
 
-  const handleResumeProject = (project: Project) => {
-    updateProject(project.id, {
+  const handleResumeProject = async (project: Project) => {
+    await updateProjectInDb(project.id, {
       lifecycle: "building", // Resume to building by default
       status: "active",
-      updated_at: new Date().toISOString(),
     });
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan" />
+      </div>
+    );
+  }
 
   // Filter projects by lifecycle
   const activeProjects = projects.filter(
