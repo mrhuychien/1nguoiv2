@@ -17,8 +17,7 @@ export function useProjectData(options: UseProjectDataOptions = {}) {
     isLoading,
     isInitialized,
     error,
-    fetchProjects,
-    fetchTasks,
+    fetchAll,
     setProjects,
     setTasks,
   } = useProjectStore();
@@ -35,12 +34,11 @@ export function useProjectData(options: UseProjectDataOptions = {}) {
       return;
     }
 
-    // Fetch from Supabase
+    // Fetch projects and tasks in parallel from Supabase
     if (user?.id && !isInitialized) {
-      fetchProjects(user.id);
-      fetchTasks(user.id);
+      fetchAll(user.id);
     }
-  }, [user?.id, userLoading, useMockData, isInitialized, projects.length, fetchProjects, fetchTasks, setProjects, setTasks]);
+  }, [user?.id, userLoading, useMockData, isInitialized, projects.length, fetchAll, setProjects, setTasks]);
 
   return {
     projects,

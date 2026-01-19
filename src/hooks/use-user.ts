@@ -42,42 +42,39 @@ export function useUser() {
 
     const getInitialSession = async () => {
       try {
-        const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+        // Use getSession first (faster, uses cache) then validate with getUser
+        const { data: { session } } = await supabase.auth.getSession();
 
         if (!isMounted) return;
 
-        if (authError) {
-          // Ignore abort errors
-          if (authError.name === 'AbortError' || authError.message?.includes('aborted')) {
-            setIsLoading(false);
-            setIsInitialized(true);
-            return;
-          }
-          console.error("Auth error:", authError);
-          setError(authError);
+        if (!session?.user) {
           setIsLoading(false);
           setIsInitialized(true);
           return;
         }
 
-        setUser(authUser);
+        // Set user immediately from session
+        setUser(session.user);
 
-        if (authUser) {
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const supabaseAny = supabase as any;
-            const { data: profileData } = await supabaseAny
-              .from("profiles")
-              .select("*")
-              .eq("id", authUser.id)
-              .single();
+        // Fetch profile in parallel with validating user
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const supabaseAny = supabase as any;
+        const profilePromise = supabaseAny
+          .from("profiles")
+          .select("*")
+          .eq("id", session.user.id)
+          .single();
 
-            if (isMounted && profileData) {
-              setProfile(profileData);
-            }
-          } catch (err) {
-            console.error("Profile fetch error:", err);
-          }
+        // Validate user in background (refresh token if needed)
+        supabase.auth.getUser().catch(() => {
+          // Silently handle - if token is invalid, onAuthStateChange will catch it
+        });
+
+        // Wait for profile
+        const { data: profileData } = await profilePromise;
+
+        if (isMounted && profileData) {
+          setProfile(profileData);
         }
       } catch (err) {
         if (!isMounted) return;

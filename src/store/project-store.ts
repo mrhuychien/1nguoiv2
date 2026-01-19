@@ -14,6 +14,7 @@ interface ProjectState {
 
 interface ProjectActions {
   // Supabase operations
+  fetchAll: (userId: string) => Promise<void>;
   fetchProjects: (userId: string) => Promise<void>;
   fetchTasks: (userId: string) => Promise<void>;
   createProject: (project: Omit<ProjectInsert, "id" | "created_at" | "updated_at">) => Promise<Project | null>;
@@ -59,6 +60,42 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   error: null,
 
   // ========== SUPABASE OPERATIONS ==========
+
+  // Fetch both projects and tasks in parallel for faster loading
+  fetchAll: async (userId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      const supabase = createClient();
+
+      // Fetch both in parallel
+      const [projectsResult, tasksResult] = await Promise.all([
+        supabase
+          .from("projects")
+          .select("*")
+          .eq("user_id", userId)
+          .order("updated_at", { ascending: false }),
+        supabase
+          .from("tasks")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+      ]);
+
+      if (projectsResult.error) throw projectsResult.error;
+      if (tasksResult.error) throw tasksResult.error;
+
+      set({
+        projects: projectsResult.data || [],
+        tasks: tasksResult.data || [],
+        isInitialized: true
+      });
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      set({ error: (error as Error).message });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
 
   fetchProjects: async (userId: string) => {
     set({ isLoading: true, error: null });
