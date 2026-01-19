@@ -49,12 +49,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
     if (isInitialized) return;
 
     let isMounted = true;
+    let timeoutId: NodeJS.Timeout | null = null;
     const supabase = createClient();
 
     const getInitialSession = async () => {
+      // Add timeout to prevent hanging
+      timeoutId = setTimeout(() => {
+        if (isMounted) {
+          console.warn("Auth check timeout - proceeding without user");
+          setIsLoading(false);
+          setIsInitialized(true);
+        }
+      }, 5000); // 5 second timeout
+
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
+        if (timeoutId) clearTimeout(timeoutId);
         if (!isMounted) return;
 
         if (sessionError) {
@@ -72,8 +83,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
         // Set user immediately from session
         setUser(session.user);
+        // Mark as initialized early so UI can render
+        setIsLoading(false);
+        setIsInitialized(true);
 
-        // Fetch profile
+        // Fetch profile in background (non-blocking)
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const supabaseAny = supabase as any;
@@ -95,6 +109,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         // Validate user in background
         supabase.auth.getUser().catch(() => {});
       } catch (err) {
+        if (timeoutId) clearTimeout(timeoutId);
         if (!isMounted) return;
         if (err instanceof Error && (err.name === 'AbortError' || err.message?.includes('aborted'))) {
           // Ignore abort errors
@@ -102,11 +117,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
           console.error("Session error:", err);
           setError(err instanceof Error ? err : new Error('Unknown error'));
         }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-          setIsInitialized(true);
-        }
+        setIsLoading(false);
+        setIsInitialized(true);
       }
     };
 
@@ -147,6 +159,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     return () => {
       isMounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, [isInitialized]);
