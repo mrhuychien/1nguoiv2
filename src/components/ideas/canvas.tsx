@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import * as d3 from "d3";
-import { Search, X, Loader2, ZoomIn, ZoomOut, Crosshair } from "lucide-react";
+import { Search, X, Loader2, ZoomIn, ZoomOut, Crosshair, Pencil, Play, Plus, ArrowRight } from "lucide-react";
 import { useIdeaStore } from "@/store/idea-store";
 import { useIdeaData } from "@/hooks/use-idea-data";
 import { GraphSelector } from "./graph-selector";
@@ -30,6 +30,8 @@ export function Canvas() {
   const nodesDataRef = useRef<D3Node[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [editMode, setEditMode] = useState(true); // Start in edit mode by default
+  const [selectedNodePosition, setSelectedNodePosition] = useState<{ x: number; y: number } | null>(null);
 
   // Load data from Supabase
   const { isLoading, userId } = useIdeaData();
@@ -126,6 +128,15 @@ export function Canvas() {
 
     simulationRef.current = simulation;
 
+    // In edit mode, stop simulation immediately and fix all nodes in place
+    if (editMode) {
+      simulation.stop();
+      nodes.forEach((n) => {
+        n.fx = n.x;
+        n.fy = n.y;
+      });
+    }
+
     // Create links (edges)
     const link = g.append("g")
       .attr("class", "links")
@@ -203,37 +214,45 @@ export function Canvas() {
         // If in connect mode and we have a source, create the link
         if (connectMode && connectSourceId && connectSourceId !== d.id && userId) {
           completeConnection(d.id, userId);
+          setSelectedNodePosition(null);
         } else if (event.shiftKey && selectedNodeId && selectedNodeId !== d.id && userId) {
           // Shift+click to connect selected node to this node
           addLink(selectedNodeId, d.id, userId);
         } else {
           selectNode(d.id);
-          // Stop simulation and fix node position before centering
+
           if (d.x !== undefined && d.y !== undefined) {
-            // Stop the simulation to prevent movement
-            simulation.stop();
-
-            // Fix the clicked node in place
-            d.fx = d.x;
-            d.fy = d.y;
-
-            const nodeX = d.x;
-            const nodeY = d.y;
+            // Calculate screen position for action buttons
             const currentTransform = d3.zoomTransform(svg.node()!);
-            const scale = currentTransform.k;
-            const centerTransform = d3.zoomIdentity
-              .translate(width / 2 - nodeX * scale, height / 2 - nodeY * scale)
-              .scale(scale);
+            const screenX = d.x * currentTransform.k + currentTransform.x;
+            const screenY = d.y * currentTransform.k + currentTransform.y;
+            setSelectedNodePosition({ x: screenX, y: screenY });
 
-            // Center on node with animation
-            svg.transition()
-              .duration(400)
-              .call(zoom.transform, centerTransform)
-              .on("end", () => {
-                // Release the node after centering is complete
-                d.fx = null;
-                d.fy = null;
-              });
+            if (editMode) {
+              // In edit mode, just keep node fixed, no centering animation
+              d.fx = d.x;
+              d.fy = d.y;
+            } else {
+              // In simulation mode, center the node
+              simulation.stop();
+              d.fx = d.x;
+              d.fy = d.y;
+
+              const nodeX = d.x;
+              const nodeY = d.y;
+              const scale = currentTransform.k;
+              const centerTransform = d3.zoomIdentity
+                .translate(width / 2 - nodeX * scale, height / 2 - nodeY * scale)
+                .scale(scale);
+
+              svg.transition()
+                .duration(400)
+                .call(zoom.transform, centerTransform)
+                .on("end", () => {
+                  d.fx = null;
+                  d.fy = null;
+                });
+            }
           }
         }
       });
@@ -288,6 +307,7 @@ export function Canvas() {
     svg.on("click", () => {
       selectNode(null);
       cancelConnectMode();
+      setSelectedNodePosition(null);
     });
 
     // Double click to add new node
@@ -313,7 +333,9 @@ export function Canvas() {
 
     // Drag functions
     function dragstarted(event: d3.D3DragEvent<SVGGElement, D3Node, D3Node>) {
-      if (!event.active) simulation.alphaTarget(0.3).restart();
+      if (!editMode && !event.active) {
+        simulation.alphaTarget(0.3).restart();
+      }
       event.subject.fx = event.subject.x;
       event.subject.fy = event.subject.y;
     }
@@ -324,10 +346,13 @@ export function Canvas() {
     }
 
     function dragended(event: d3.D3DragEvent<SVGGElement, D3Node, D3Node>) {
-      if (!event.active) simulation.alphaTarget(0);
-      // Release the node (let physics take over)
-      event.subject.fx = null;
-      event.subject.fy = null;
+      if (!editMode) {
+        if (!event.active) simulation.alphaTarget(0);
+        // Release the node (let physics take over)
+        event.subject.fx = null;
+        event.subject.fy = null;
+      }
+      // In edit mode, keep node fixed at new position
       // Save position to database
       saveNodePosition(event.subject.id);
     }
@@ -342,7 +367,7 @@ export function Canvas() {
     return () => {
       simulation.stop();
     };
-  }, [storeNodes, storeLinks, selectedNodeId, addNode, addLink, selectNode, connectMode, connectSourceId, searchResults, completeConnection, cancelConnectMode, userId, saveNodePosition]);
+  }, [storeNodes, storeLinks, selectedNodeId, addNode, addLink, selectNode, connectMode, connectSourceId, searchResults, completeConnection, cancelConnectMode, userId, saveNodePosition, editMode]);
 
   // Reheat simulation
   const reheat = useCallback(() => {
@@ -567,8 +592,93 @@ export function Canvas() {
         </div>
       )}
 
+      {/* Node Action Buttons (appear near selected node in edit mode) */}
+      {editMode && selectedNodeId && selectedNodePosition && (
+        <div
+          className="absolute z-50 flex items-center gap-1 p-1 rounded-lg bg-black/80 backdrop-blur-sm border border-white/20 shadow-lg"
+          style={{
+            left: selectedNodePosition.x + 30,
+            top: selectedNodePosition.y - 16,
+            transform: 'translateY(-50%)',
+          }}
+        >
+          {/* Connect button */}
+          <button
+            onClick={() => {
+              handleStartConnectMode();
+            }}
+            className={`h-7 w-7 flex items-center justify-center rounded transition-colors ${
+              connectMode
+                ? "text-cyan-400 bg-cyan-500/20"
+                : "text-gray-300 hover:text-white hover:bg-white/10"
+            }`}
+            title="Kết nối với node khác"
+          >
+            <ArrowRight className="w-4 h-4" />
+          </button>
+          {/* Add connected node button */}
+          <button
+            onClick={() => {
+              if (!userId) return;
+              const selectedNode = nodesDataRef.current.find((n) => n.id === selectedNodeId);
+              if (selectedNode && selectedNode.x !== undefined && selectedNode.y !== undefined) {
+                // Create new node near selected node
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = 80 + Math.random() * 40;
+                const newX = selectedNode.x + Math.cos(angle) * distance;
+                const newY = selectedNode.y + Math.sin(angle) * distance;
+                // Add node and immediately connect it
+                addNode(newX, newY, userId).then((newNodeId) => {
+                  if (newNodeId && selectedNodeId) {
+                    addLink(selectedNodeId, newNodeId, userId);
+                  }
+                });
+              }
+            }}
+            className="h-7 w-7 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded transition-colors"
+            title="Thêm node mới và kết nối"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Toolbar */}
       <div className="absolute top-4 right-4 flex flex-col gap-0.5 p-1.5 rounded-lg bg-black/50 backdrop-blur-sm border border-white/10">
+        {/* Edit mode toggle */}
+        <button
+          onClick={() => {
+            setEditMode(!editMode);
+            setSelectedNodePosition(null);
+            if (!editMode) {
+              // Entering edit mode - stop simulation
+              if (simulationRef.current) {
+                simulationRef.current.stop();
+              }
+            } else {
+              // Exiting edit mode - reheat simulation
+              if (simulationRef.current) {
+                // Unfix all nodes
+                nodesDataRef.current.forEach((n) => {
+                  n.fx = null;
+                  n.fy = null;
+                });
+                simulationRef.current.alpha(0.3).restart();
+              }
+            }
+          }}
+          className={`h-8 w-8 flex items-center justify-center rounded transition-colors ${
+            editMode
+              ? "text-cyan-400 bg-cyan-500/20"
+              : "text-gray-400 hover:text-white hover:bg-white/10"
+          }`}
+          title={editMode ? "Chế độ chỉnh sửa (bấm để bật simulation)" : "Chế độ simulation (bấm để chỉnh sửa)"}
+        >
+          {editMode ? <Pencil className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+        </button>
+
+        <div className="h-px bg-white/10 mx-1" />
+
         <button
           onClick={() => {
             const container = containerRef.current;
@@ -703,14 +813,22 @@ export function Canvas() {
         )}
       </div>
 
-      {/* Stats */}
+      {/* Stats and mode indicator */}
       <div className="absolute bottom-4 left-4 px-3 py-1.5 bg-black/60 backdrop-blur-sm rounded text-[11px] text-gray-500 flex items-center gap-3">
+        <span className={`flex items-center gap-1.5 ${editMode ? 'text-cyan-400' : 'text-green-400'}`}>
+          {editMode ? <Pencil className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+          {editMode ? 'Chỉnh sửa' : 'Mô phỏng'}
+        </span>
+        <span className="text-gray-600">|</span>
         <span>{storeNodes.length} nodes · {storeLinks.length} connections</span>
       </div>
 
       {/* Instructions */}
       <div className="absolute bottom-4 right-4 px-3 py-1.5 bg-black/60 backdrop-blur-sm rounded text-[10px] text-gray-600">
-        Drag: di chuyển · Scroll: zoom · Double-click: thêm · Shift+Click: kết nối · Space: reheat
+        {editMode
+          ? "Drag: di chuyển · Click: chọn · →: kết nối · +: thêm nối"
+          : "Drag: di chuyển · Scroll: zoom · Double-click: thêm · Shift+Click: kết nối · Space: reheat"
+        }
       </div>
     </div>
   );

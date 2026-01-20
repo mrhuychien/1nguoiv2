@@ -58,7 +58,7 @@ interface IdeaActions {
   setGraphId: (graphId: string) => void;
 
   // Node actions (local + db)
-  addNode: (x: number, y: number, userId: string) => Promise<void>;
+  addNode: (x: number, y: number, userId: string) => Promise<string | undefined>;
   updateNode: (id: string, updates: Partial<IdeaNode>) => void;
   deleteNode: (id: string) => Promise<void>;
   selectNode: (id: string | null) => void;
@@ -443,7 +443,9 @@ export const useIdeaStore = create<IdeaStore>((set, get) => ({
         nodes: [...state.nodes, newNode],
         selectedNodeId: newNode.id,
       }));
+      return newNode.id;
     }
+    return undefined;
   },
 
   updateNode: (id, updates) => {
