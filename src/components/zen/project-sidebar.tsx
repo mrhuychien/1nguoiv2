@@ -5,6 +5,7 @@ import {
   Plus,
   Folder,
   ChevronRight,
+  ChevronDown,
   Rocket,
   Pen,
   Book,
@@ -12,12 +13,17 @@ import {
   Code,
   Palette,
   ListTodo,
+  Circle,
+  CheckCircle2,
+  Clock,
+  SkipForward,
+  GripVertical,
 } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
 import { cn } from "@/lib/utils";
 import { TemplateSelector } from "./template-selector";
 import { TemplatePreview } from "./template-preview";
-import type { TemplateId } from "@/types/zen";
+import type { TemplateId, TaskStatus } from "@/types/zen";
 import {
   getTemplateEstimatedTime,
   formatMinutesToHours,
@@ -46,13 +52,34 @@ const COLORS = [
   "#eab308", // yellow
 ];
 
+const STATUS_ICONS: Record<TaskStatus, React.ElementType> = {
+  pending: Circle,
+  in_progress: Clock,
+  completed: CheckCircle2,
+  blocked: Circle,
+  skipped: SkipForward,
+};
+
+// Unified task type for display
+interface DisplayTask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  estimatedMinutes: number;
+  emoji?: string;
+  isTemplate: boolean;
+}
+
 export function ProjectSidebar({ className }: ProjectSidebarProps) {
   const {
     projects,
     activeProjectId,
     setActiveProject,
     setShowNewProjectModal,
+    getProjectTemplateTasks,
   } = useZenStore();
+
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -73,72 +100,179 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
       <div className="space-y-1">
         {projects.map((project) => {
           const isActive = activeProjectId === project.id;
+          const isExpanded = expandedProjectId === project.id;
           const Icon = ICONS[project.icon] || Folder;
-          const completedTasks = project.tasks.filter(
-            (t) => t.status === "completed"
+
+          // Get both template and manual tasks
+          const templateTasks = getProjectTemplateTasks(project.id);
+          const manualTasks = project.tasks || [];
+
+          // Combine into display tasks
+          const allTasks: DisplayTask[] = [
+            ...templateTasks.map((t) => ({
+              id: t.id,
+              title: t.title,
+              status: t.status,
+              estimatedMinutes: t.estimatedMinutes,
+              emoji: t.emoji,
+              isTemplate: true,
+            })),
+            ...manualTasks.map((t) => ({
+              id: t.id,
+              title: t.title,
+              status: t.status,
+              estimatedMinutes: t.estimatedMinutes,
+              isTemplate: false,
+            })),
+          ];
+
+          const completedCount = allTasks.filter(
+            (t) => t.status === "completed" || t.status === "skipped"
           ).length;
-          const totalTasks = project.tasks.length;
+          const totalTasks = allTasks.length;
           const progress =
-            project.totalMinutes > 0
-              ? (project.completedMinutes / project.totalMinutes) * 100
+            totalTasks > 0
+              ? (completedCount / totalTasks) * 100
               : 0;
 
-          return (
-            <button
-              key={project.id}
-              onClick={() => setActiveProject(project.id)}
-              className={cn(
-                "w-full flex items-center gap-3 p-3 rounded-lg transition-all text-left",
-                isActive
-                  ? "bg-gray-800/80 border border-gray-700"
-                  : "hover:bg-gray-800/50"
-              )}
-            >
-              {/* Icon */}
-              <div
-                className="flex items-center justify-center w-9 h-9 rounded-lg"
-                style={{ backgroundColor: `${project.color}20` }}
-              >
-                <Icon
-                  className="w-4 h-4"
-                  style={{ color: project.color }}
-                />
-              </div>
+          // Filter active tasks for display (pending + in_progress)
+          const activeTasks = allTasks.filter(
+            (t) => t.status === "pending" || t.status === "in_progress"
+          ).sort((a, b) => {
+            // in_progress first
+            if (a.status === "in_progress" && b.status !== "in_progress") return -1;
+            if (b.status === "in_progress" && a.status !== "in_progress") return 1;
+            return 0;
+          });
 
-              {/* Content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      "font-medium truncate",
-                      isActive ? "text-white" : "text-gray-300"
-                    )}
-                  >
-                    {project.name}
-                  </span>
+          const handleProjectClick = () => {
+            setActiveProject(project.id);
+            setExpandedProjectId(isExpanded ? null : project.id);
+          };
+
+          const handleDragStart = (e: React.DragEvent, task: DisplayTask) => {
+            e.dataTransfer.setData("application/json", JSON.stringify({
+              taskId: task.id,
+              taskType: task.isTemplate ? "template" : "manual",
+              title: task.title,
+              emoji: task.emoji,
+            }));
+            e.dataTransfer.effectAllowed = "move";
+          };
+
+          return (
+            <div key={project.id}>
+              <button
+                onClick={handleProjectClick}
+                className={cn(
+                  "w-full flex items-center gap-3 p-3 rounded-lg transition-all text-left",
+                  isActive
+                    ? "bg-gray-800/80 border border-gray-700"
+                    : "hover:bg-gray-800/50"
+                )}
+              >
+                {/* Expand/collapse icon */}
+                <div className="flex-shrink-0">
+                  {isExpanded ? (
+                    <ChevronDown className="w-4 h-4 text-gray-500" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-gray-500" />
+                  )}
                 </div>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs text-gray-500">
-                    {completedTasks}/{totalTasks} tasks
-                  </span>
-                  {/* Progress bar */}
-                  <div className="flex-1 h-1 bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${progress}%`,
-                        backgroundColor: project.color,
-                      }}
-                    />
+
+                {/* Icon */}
+                <div
+                  className="flex items-center justify-center w-9 h-9 rounded-lg"
+                  style={{ backgroundColor: `${project.color}20` }}
+                >
+                  <Icon
+                    className="w-4 h-4"
+                    style={{ color: project.color }}
+                  />
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "font-medium truncate",
+                        isActive ? "text-white" : "text-gray-300"
+                      )}
+                    >
+                      {project.name}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-gray-500">
+                      {completedCount}/{totalTasks} tasks
+                    </span>
+                    {/* Progress bar */}
+                    <div className="flex-1 h-1 bg-gray-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${progress}%`,
+                          backgroundColor: project.color,
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              </button>
 
-              {/* Arrow */}
-              {isActive && (
-                <ChevronRight className="w-4 h-4 text-gray-500" />
+              {/* Expandable Task List */}
+              {isExpanded && (
+                <div className="ml-4 mt-1 space-y-1 animate-zen-fade">
+                  {activeTasks.length === 0 ? (
+                    <p className="text-xs text-gray-500 p-2 pl-6">
+                      Không có task nào
+                    </p>
+                  ) : (
+                    activeTasks.slice(0, 5).map((task) => {
+                      const StatusIcon = STATUS_ICONS[task.status];
+                      return (
+                        <div
+                          key={task.id}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, task)}
+                          className={cn(
+                            "flex items-center gap-2 p-2 rounded-lg cursor-grab active:cursor-grabbing transition-all",
+                            "border border-transparent hover:border-gray-700 hover:bg-gray-800/50",
+                            task.status === "in_progress" && "bg-cyan-500/10 border-cyan-500/30"
+                          )}
+                        >
+                          <GripVertical className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                          <StatusIcon
+                            className={cn(
+                              "w-4 h-4 flex-shrink-0",
+                              task.status === "in_progress" ? "text-cyan-400" : "text-gray-500"
+                            )}
+                          />
+                          {task.emoji && (
+                            <span className="text-sm flex-shrink-0">{task.emoji}</span>
+                          )}
+                          <span className={cn(
+                            "text-sm truncate flex-1",
+                            task.status === "in_progress" ? "text-white" : "text-gray-400"
+                          )}>
+                            {task.title}
+                          </span>
+                          <span className="text-[10px] text-gray-600 flex-shrink-0">
+                            {task.estimatedMinutes}m
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                  {activeTasks.length > 5 && (
+                    <p className="text-xs text-gray-500 p-2 pl-6">
+                      +{activeTasks.length - 5} tasks khác
+                    </p>
+                  )}
+                </div>
               )}
-            </button>
+            </div>
           );
         })}
       </div>

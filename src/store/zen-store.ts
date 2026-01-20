@@ -36,6 +36,10 @@ interface ZenStoreState {
   // Template Tasks (separate from project tasks)
   templateTasks: ProjectTask[];
 
+  // Current Timer Task
+  currentTimerTaskId: string | null;
+  currentTimerTaskType: "template" | "manual" | null;
+
   // Timer
   timerState: TimerState;
   timerSeconds: number;
@@ -59,6 +63,7 @@ interface ZenStoreState {
 
   // UI State
   showSessionComplete: boolean;
+  showTaskCompleteDialog: boolean;
   showDeepWorkOverlay: boolean;
   showNewProjectModal: boolean;
   bellEnabled: boolean;
@@ -121,8 +126,14 @@ interface ZenStoreActions {
   startSession: () => void;
   endSession: (notes?: string) => void;
 
+  // Timer Task actions
+  setTimerTask: (taskId: string, taskType: "template" | "manual") => void;
+  clearTimerTask: () => void;
+  getCurrentTimerTask: () => { id: string; title: string; emoji?: string } | null;
+
   // UI actions
   setShowSessionComplete: (show: boolean) => void;
+  setShowTaskCompleteDialog: (show: boolean) => void;
   setShowDeepWorkOverlay: (show: boolean) => void;
   setShowNewProjectModal: (show: boolean) => void;
   toggleBell: () => void;
@@ -143,6 +154,9 @@ const initialState: ZenStoreState = {
   activeTaskId: null,
 
   templateTasks: [],
+
+  currentTimerTaskId: null,
+  currentTimerTaskType: null,
 
   timerState: "idle",
   timerSeconds: 0,
@@ -167,6 +181,7 @@ const initialState: ZenStoreState = {
   },
 
   showSessionComplete: false,
+  showTaskCompleteDialog: false,
   showDeepWorkOverlay: false,
   showNewProjectModal: false,
   bellEnabled: true,
@@ -590,8 +605,38 @@ export const useZenStore = create<ZenStore>()(
         });
       },
 
+      // Timer Task actions
+      setTimerTask: (taskId, taskType) => {
+        set({ currentTimerTaskId: taskId, currentTimerTaskType: taskType });
+      },
+
+      clearTimerTask: () => {
+        set({ currentTimerTaskId: null, currentTimerTaskType: null });
+      },
+
+      getCurrentTimerTask: () => {
+        const { currentTimerTaskId, currentTimerTaskType, templateTasks, projects, activeProjectId } = get();
+        if (!currentTimerTaskId || !currentTimerTaskType) return null;
+
+        if (currentTimerTaskType === "template") {
+          const task = templateTasks.find((t) => t.id === currentTimerTaskId);
+          if (task) {
+            return { id: task.id, title: task.title, emoji: task.emoji };
+          }
+        } else {
+          // Manual task
+          const project = projects.find((p) => p.id === activeProjectId);
+          const task = project?.tasks.find((t) => t.id === currentTimerTaskId);
+          if (task) {
+            return { id: task.id, title: task.title };
+          }
+        }
+        return null;
+      },
+
       // UI actions
       setShowSessionComplete: (show) => set({ showSessionComplete: show }),
+      setShowTaskCompleteDialog: (show) => set({ showTaskCompleteDialog: show }),
       setShowDeepWorkOverlay: (show) => set({ showDeepWorkOverlay: show }),
       setShowNewProjectModal: (show) => set({ showNewProjectModal: show }),
 
