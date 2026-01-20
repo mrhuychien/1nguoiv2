@@ -430,6 +430,10 @@ export function Canvas() {
   // Start connect mode (uses store)
   const handleStartConnectMode = useCallback(() => {
     if (selectedNodeId) {
+      // Stop simulation to prevent nodes from moving
+      if (simulationRef.current) {
+        simulationRef.current.stop();
+      }
       startConnectMode(selectedNodeId);
     }
   }, [selectedNodeId, startConnectMode]);
