@@ -30,9 +30,11 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { useProjectStore } from "@/store/project-store";
+import { useZenStore } from "@/store/zen-store";
 import { useProjectData } from "@/hooks/use-project-data";
 import { cn } from "@/lib/utils";
 import { Task } from "@/types/database.types";
+import { TaskStatus } from "@/types/zen";
 
 const lifecycleConfig = {
   idea: {
@@ -138,11 +140,72 @@ export default function ProjectDetailPage() {
     updateTaskInDb,
   } = useProjectStore();
 
+  // Get template tasks from zen-store
+  const {
+    getProjectTemplateTasks,
+    completeTemplateTask,
+    skipTemplateTask,
+    startTemplateTask,
+  } = useZenStore();
+
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [isAddingTask, setIsAddingTask] = useState(false);
+  const [viewMode, setViewMode] = useState<"all" | "template" | "manual">("all");
 
   const project = getProjectById(projectId);
-  const tasks = getProjectTasks(projectId);
+  const manualTasks = getProjectTasks(projectId);
+  const templateTasks = getProjectTemplateTasks(projectId);
+
+  // Unified task type for display
+  interface DisplayTask {
+    id: string;
+    title: string;
+    completed: boolean;
+    status: TaskStatus;
+    emoji?: string;
+    estimatedMinutes?: number;
+    timeSpentMinutes?: number;
+    zone?: string;
+    phase?: number;
+    isTemplate: boolean;
+  }
+
+  // Combine tasks for display
+  const allTasks: DisplayTask[] = [
+    ...templateTasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      completed: t.status === "completed",
+      status: t.status,
+      emoji: t.emoji,
+      estimatedMinutes: t.estimatedMinutes,
+      timeSpentMinutes: t.timeSpentMinutes,
+      zone: t.zone,
+      phase: t.phase,
+      isTemplate: true,
+    })),
+    ...manualTasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      completed: t.completed,
+      status: t.completed ? "completed" as TaskStatus : "pending" as TaskStatus,
+      emoji: undefined,
+      estimatedMinutes: undefined,
+      timeSpentMinutes: undefined,
+      zone: undefined,
+      phase: undefined,
+      isTemplate: false,
+    })),
+  ];
+
+  // Filter based on view mode
+  const displayTasks = viewMode === "all"
+    ? allTasks
+    : viewMode === "template"
+    ? allTasks.filter((t) => t.isTemplate)
+    : allTasks.filter((t) => !t.isTemplate);
+
+  // manualTasks is used directly as 'tasks' for backward compatibility with handleToggleDailyFocus
 
   // Loading state
   if (isLoading) {
@@ -179,7 +242,8 @@ export default function ProjectDetailPage() {
   const Icon = config.icon;
   const health = healthConfig[project.health];
   const HealthIcon = health.icon;
-  const completedTasks = tasks.filter((t) => t.completed).length;
+  const completedTasks = allTasks.filter((t) => t.completed || t.status === "completed" || t.status === "skipped").length;
+  const totalTaskCount = allTasks.length;
 
   const handleMoveToNextStage = async () => {
     if (config.next) {
@@ -367,7 +431,7 @@ export default function ProjectDetailPage() {
               <CheckCircle2 className="h-5 w-5 text-text-muted mx-auto mb-2" />
               <p className="text-xs text-text-muted mb-1">Tasks</p>
               <p className="font-semibold text-sm">
-                {completedTasks}/{tasks.length}
+                {completedTasks}/{totalTaskCount}
               </p>
             </div>
             <div className="bg-background-secondary rounded-xl p-4 text-center">
@@ -391,10 +455,52 @@ export default function ProjectDetailPage() {
       {/* Tasks Section */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <CardTitle className="text-lg">
-              Tasks ({completedTasks}/{tasks.length})
+              Tasks ({completedTasks}/{totalTaskCount})
             </CardTitle>
+            {/* View Mode Tabs */}
+            {(templateTasks.length > 0 || manualTasks.length > 0) && (
+              <div className="flex items-center gap-1 p-1 bg-background-secondary rounded-lg">
+                <button
+                  onClick={() => setViewMode("all")}
+                  className={cn(
+                    "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                    viewMode === "all"
+                      ? "bg-cyan text-white"
+                      : "text-text-muted hover:text-text-primary"
+                  )}
+                >
+                  Tất cả ({allTasks.length})
+                </button>
+                {templateTasks.length > 0 && (
+                  <button
+                    onClick={() => setViewMode("template")}
+                    className={cn(
+                      "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                      viewMode === "template"
+                        ? "bg-purple-500 text-white"
+                        : "text-text-muted hover:text-text-primary"
+                    )}
+                  >
+                    Template ({templateTasks.length})
+                  </button>
+                )}
+                {manualTasks.length > 0 && (
+                  <button
+                    onClick={() => setViewMode("manual")}
+                    className={cn(
+                      "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                      viewMode === "manual"
+                        ? "bg-orange-500 text-white"
+                        : "text-text-muted hover:text-text-primary"
+                    )}
+                  >
+                    Thủ công ({manualTasks.length})
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -416,64 +522,166 @@ export default function ProjectDetailPage() {
           </form>
 
           {/* Task List */}
-          {tasks.length === 0 ? (
+          {displayTasks.length === 0 ? (
             <div className="text-center py-8">
               <Circle className="h-12 w-12 text-text-muted mx-auto mb-3" />
               <p className="text-text-secondary text-sm">
-                Chưa có task nào. Thêm task đầu tiên!
+                {viewMode === "all"
+                  ? "Chưa có task nào. Thêm task đầu tiên!"
+                  : viewMode === "template"
+                  ? "Chưa có template task nào."
+                  : "Chưa có task thủ công nào."}
               </p>
             </div>
           ) : (
             <div className="space-y-2">
-              {tasks.map((task) => (
-                <div
-                  key={task.id}
-                  className={cn(
-                    "flex items-center gap-3 p-3 rounded-lg border transition-colors group",
-                    task.completed
-                      ? "bg-success/5 border-success/20"
-                      : "bg-background-secondary border-border hover:border-border-hover"
-                  )}
-                >
-                  <Checkbox
-                    checked={task.completed}
-                    onCheckedChange={() => toggleTaskCompleteInDb(task.id)}
-                  />
-                  <span
+              {displayTasks.map((task) => {
+                const isCompleted = task.completed || task.status === "completed";
+                const isSkipped = task.status === "skipped";
+                const isInProgress = task.status === "in_progress";
+
+                return (
+                  <div
+                    key={task.id}
                     className={cn(
-                      "flex-1 text-sm",
-                      task.completed
-                        ? "text-text-muted line-through"
-                        : "text-text-primary"
+                      "flex items-center gap-3 p-3 rounded-lg border transition-colors group",
+                      isCompleted
+                        ? "bg-success/5 border-success/20"
+                        : isSkipped
+                        ? "bg-slate-500/5 border-slate-500/20"
+                        : isInProgress
+                        ? "bg-cyan/5 border-cyan/20"
+                        : "bg-background-secondary border-border hover:border-border-hover"
                     )}
                   >
-                    {task.title}
-                  </span>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={cn(
-                        "h-7 px-2 text-xs",
-                        task.is_daily_focus
-                          ? "text-warning bg-warning/10"
-                          : "text-text-muted"
+                    {/* Checkbox or Status Icon */}
+                    {task.isTemplate ? (
+                      <div className="flex items-center gap-2">
+                        {isCompleted ? (
+                          <CheckCircle2 className="h-5 w-5 text-success" />
+                        ) : isSkipped ? (
+                          <Circle className="h-5 w-5 text-slate-500" />
+                        ) : isInProgress ? (
+                          <Clock className="h-5 w-5 text-cyan animate-pulse" />
+                        ) : (
+                          <Circle className="h-5 w-5 text-text-muted" />
+                        )}
+                      </div>
+                    ) : (
+                      <Checkbox
+                        checked={task.completed}
+                        onCheckedChange={() => toggleTaskCompleteInDb(task.id)}
+                      />
+                    )}
+
+                    {/* Task Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        {task.emoji && (
+                          <span className="text-base">{task.emoji}</span>
+                        )}
+                        <span
+                          className={cn(
+                            "text-sm truncate",
+                            isCompleted || isSkipped
+                              ? "text-text-muted line-through"
+                              : isInProgress
+                              ? "text-cyan font-medium"
+                              : "text-text-primary"
+                          )}
+                        >
+                          {task.title}
+                        </span>
+                        {task.isTemplate && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 bg-purple-500/10 text-purple-400 border-purple-500/30">
+                            Template
+                          </Badge>
+                        )}
+                        {task.zone && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                            {task.zone === "design" ? "📐" : "🔨"} {task.zone}
+                          </Badge>
+                        )}
+                      </div>
+                      {task.isTemplate && task.estimatedMinutes && (
+                        <div className="flex items-center gap-2 mt-1 text-xs text-text-muted">
+                          <span>⏱️ {task.estimatedMinutes}m dự kiến</span>
+                          {(task.timeSpentMinutes ?? 0) > 0 && (
+                            <span className="text-cyan">• {task.timeSpentMinutes}m đã làm</span>
+                          )}
+                        </div>
                       )}
-                      onClick={() => handleToggleDailyFocus(task)}
-                    >
-                      {task.is_daily_focus ? "★" : "☆"}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-danger hover:text-danger hover:bg-danger/10"
-                      onClick={() => deleteTaskFromDb(task.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {task.isTemplate ? (
+                        <>
+                          {!isCompleted && !isSkipped && !isInProgress && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs text-cyan hover:bg-cyan/10"
+                              onClick={() => startTemplateTask(task.id)}
+                            >
+                              <Play className="h-3 w-3 mr-1" />
+                              Bắt đầu
+                            </Button>
+                          )}
+                          {isInProgress && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-success hover:bg-success/10"
+                                onClick={() => completeTemplateTask(task.id)}
+                              >
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Xong
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs text-text-muted hover:bg-slate-500/10"
+                                onClick={() => skipTemplateTask(task.id)}
+                              >
+                                Bỏ qua
+                              </Button>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                              "h-7 px-2 text-xs",
+                              manualTasks.find((t) => t.id === task.id)?.is_daily_focus
+                                ? "text-warning bg-warning/10"
+                                : "text-text-muted"
+                            )}
+                            onClick={() => {
+                              const originalTask = manualTasks.find((t) => t.id === task.id);
+                              if (originalTask) handleToggleDailyFocus(originalTask);
+                            }}
+                          >
+                            {manualTasks.find((t) => t.id === task.id)?.is_daily_focus ? "★" : "☆"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-danger hover:text-danger hover:bg-danger/10"
+                            onClick={() => deleteTaskFromDb(task.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
