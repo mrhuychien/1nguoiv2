@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import * as d3 from "d3";
-import { Search, X } from "lucide-react";
-import { useIdeaStore, mockNodes, mockLinks } from "@/store/idea-store";
+import { Search, X, Loader2 } from "lucide-react";
+import { useIdeaStore } from "@/store/idea-store";
+import { useIdeaData } from "@/hooks/use-idea-data";
 
 interface D3Node extends d3.SimulationNodeDatum {
   id: string;
@@ -27,11 +28,12 @@ export function Canvas() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
+  // Load data from Supabase
+  const { isLoading, userId } = useIdeaData();
+
   const {
     nodes: storeNodes,
     links: storeLinks,
-    setNodes: setStoreNodes,
-    setLinks: setStoreLinks,
     addNode,
     addLink,
     deleteNode,
@@ -46,15 +48,8 @@ export function Canvas() {
     startConnectMode,
     cancelConnectMode,
     completeConnection,
+    saveNodePosition,
   } = useIdeaStore();
-
-  // Load mock data on mount
-  useEffect(() => {
-    if (storeNodes.length === 0) {
-      setStoreNodes(mockNodes);
-      setStoreLinks(mockLinks);
-    }
-  }, [storeNodes.length, setStoreNodes, setStoreLinks]);
 
   // Main D3 setup
   useEffect(() => {
@@ -201,11 +196,11 @@ export function Canvas() {
         event.stopPropagation();
 
         // If in connect mode and we have a source, create the link
-        if (connectMode && connectSourceId && connectSourceId !== d.id) {
-          completeConnection(d.id);
-        } else if (event.shiftKey && selectedNodeId && selectedNodeId !== d.id) {
+        if (connectMode && connectSourceId && connectSourceId !== d.id && userId) {
+          completeConnection(d.id, userId);
+        } else if (event.shiftKey && selectedNodeId && selectedNodeId !== d.id && userId) {
           // Shift+click to connect selected node to this node
-          addLink(selectedNodeId, d.id);
+          addLink(selectedNodeId, d.id, userId);
         } else {
           selectNode(d.id);
         }
@@ -265,11 +260,12 @@ export function Canvas() {
 
     // Double click to add new node
     svg.on("dblclick", (event) => {
+      if (!userId) return;
       const [x, y] = d3.pointer(event);
       const transform = d3.zoomTransform(svg.node()!);
       const realX = (x - transform.x) / transform.k;
       const realY = (y - transform.y) / transform.k;
-      addNode(realX, realY);
+      addNode(realX, realY, userId);
     });
 
     // Update positions on each tick
@@ -300,6 +296,8 @@ export function Canvas() {
       // Release the node (let physics take over)
       event.subject.fx = null;
       event.subject.fy = null;
+      // Save position to database
+      saveNodePosition(event.subject.id);
     }
 
     // Initial zoom to fit
@@ -312,7 +310,7 @@ export function Canvas() {
     return () => {
       simulation.stop();
     };
-  }, [storeNodes, storeLinks, selectedNodeId, addNode, addLink, selectNode, connectMode, connectSourceId, searchResults, completeConnection, cancelConnectMode]);
+  }, [storeNodes, storeLinks, selectedNodeId, addNode, addLink, selectNode, connectMode, connectSourceId, searchResults, completeConnection, cancelConnectMode, userId, saveNodePosition]);
 
   // Reheat simulation
   const reheat = useCallback(() => {
@@ -390,6 +388,18 @@ export function Canvas() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [reheat, selectedNodeId, deleteNode, selectNode, handleStartConnectMode, cancelConnectMode, isSearchOpen, clearSearch, toggleSearch]);
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="w-full h-full relative bg-[#0a0a0f] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+          <span className="text-gray-400 text-sm">Đang tải Idea Graph...</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div ref={containerRef} className="w-full h-full relative bg-[#0a0a0f]">
       <svg ref={svgRef} className="w-full h-full" />
@@ -446,8 +456,8 @@ export function Canvas() {
         <button
           onClick={() => {
             const container = containerRef.current;
-            if (container) {
-              addNode(container.clientWidth / 2, container.clientHeight / 2);
+            if (container && userId) {
+              addNode(container.clientWidth / 2, container.clientHeight / 2, userId);
             }
           }}
           className="h-8 w-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
