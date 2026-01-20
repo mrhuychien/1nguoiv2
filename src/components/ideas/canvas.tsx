@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import * as d3 from "d3";
-import { Search, X, Loader2 } from "lucide-react";
+import { Search, X, Loader2, ZoomIn, ZoomOut, Crosshair } from "lucide-react";
 import { useIdeaStore } from "@/store/idea-store";
 import { useIdeaData } from "@/hooks/use-idea-data";
 import { GraphSelector } from "./graph-selector";
@@ -26,6 +26,8 @@ export function Canvas() {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<d3.Simulation<D3Node, D3Link> | null>(null);
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+  const nodesDataRef = useRef<D3Node[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
@@ -76,6 +78,7 @@ export function Canvas() {
       });
 
     svg.call(zoom);
+    zoomRef.current = zoom;
 
     // Create main group for zoom/pan
     const g = svg.append("g");
@@ -89,6 +92,7 @@ export function Canvas() {
       x: n.position_x,
       y: n.position_y,
     }));
+    nodesDataRef.current = nodes;
 
     const links: D3Link[] = storeLinks.map((l) => ({
       id: l.id,
@@ -204,6 +208,19 @@ export function Canvas() {
           addLink(selectedNodeId, d.id, userId);
         } else {
           selectNode(d.id);
+          // Center the clicked node on screen
+          if (d.x !== undefined && d.y !== undefined) {
+            const nodeX = d.x;
+            const nodeY = d.y;
+            const currentTransform = d3.zoomTransform(svg.node()!);
+            const scale = currentTransform.k;
+            const centerTransform = d3.zoomIdentity
+              .translate(width / 2 - nodeX * scale, height / 2 - nodeY * scale)
+              .scale(scale);
+            svg.transition()
+              .duration(500)
+              .call(zoom.transform, centerTransform);
+          }
         }
       });
 
@@ -319,6 +336,66 @@ export function Canvas() {
       simulationRef.current.alpha(0.5).restart();
     }
   }, []);
+
+  // Zoom in
+  const handleZoomIn = useCallback(() => {
+    if (!svgRef.current || !zoomRef.current) return;
+    const svg = d3.select(svgRef.current);
+    svg.transition().duration(300).call(zoomRef.current.scaleBy, 1.3);
+  }, []);
+
+  // Zoom out
+  const handleZoomOut = useCallback(() => {
+    if (!svgRef.current || !zoomRef.current) return;
+    const svg = d3.select(svgRef.current);
+    svg.transition().duration(300).call(zoomRef.current.scaleBy, 0.7);
+  }, []);
+
+  // Center on largest node (most connections)
+  const centerLargestNode = useCallback(() => {
+    if (!svgRef.current || !containerRef.current || !zoomRef.current) return;
+    if (storeNodes.length === 0) return;
+
+    // Calculate connection count for each node
+    const connectionCount: Record<string, number> = {};
+    storeNodes.forEach((n) => (connectionCount[n.id] = 0));
+    storeLinks.forEach((l) => {
+      connectionCount[l.source_id]++;
+      connectionCount[l.target_id]++;
+    });
+
+    // Find node with most connections
+    let maxConnections = -1;
+    let largestNodeId = storeNodes[0].id;
+    Object.entries(connectionCount).forEach(([id, count]) => {
+      if (count > maxConnections) {
+        maxConnections = count;
+        largestNodeId = id;
+      }
+    });
+
+    // Find node position from refs
+    const node = nodesDataRef.current.find((n) => n.id === largestNodeId);
+    if (!node || node.x === undefined || node.y === undefined) return;
+
+    const svg = d3.select(svgRef.current);
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    // Center with a nice zoom level
+    const scale = 1.2;
+    const transform = d3.zoomIdentity
+      .translate(width / 2 - node.x * scale, height / 2 - node.y * scale)
+      .scale(scale);
+
+    svg.transition()
+      .duration(500)
+      .call(zoomRef.current.transform, transform);
+
+    // Select the node
+    selectNode(largestNodeId);
+  }, [storeNodes, storeLinks, selectNode]);
 
   // Start connect mode (uses store)
   const handleStartConnectMode = useCallback(() => {
@@ -493,6 +570,34 @@ export function Canvas() {
         )}
 
         <div className="h-px bg-white/10 mx-1" />
+
+        {/* Zoom controls */}
+        <button
+          onClick={handleZoomIn}
+          className="h-8 w-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+          title="Phóng to"
+        >
+          <ZoomIn className="w-4 h-4" />
+        </button>
+        <button
+          onClick={handleZoomOut}
+          className="h-8 w-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+          title="Thu nhỏ"
+        >
+          <ZoomOut className="w-4 h-4" />
+        </button>
+
+        <div className="h-px bg-white/10 mx-1" />
+
+        {/* Center largest node */}
+        <button
+          onClick={centerLargestNode}
+          className="h-8 w-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+          title="Định vị node lớn nhất"
+        >
+          <Crosshair className="w-4 h-4" />
+        </button>
+
         <button
           onClick={reheat}
           className="h-8 w-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
@@ -502,7 +607,7 @@ export function Canvas() {
         </button>
         <button
           onClick={() => {
-            if (svgRef.current) {
+            if (svgRef.current && zoomRef.current) {
               const svg = d3.select(svgRef.current);
               const container = containerRef.current;
               if (container) {
@@ -510,7 +615,7 @@ export function Canvas() {
                   .translate(container.clientWidth / 4, container.clientHeight / 4)
                   .scale(0.8);
                 svg.transition().duration(500).call(
-                  d3.zoom<SVGSVGElement, unknown>().transform,
+                  zoomRef.current.transform,
                   transform
                 );
               }
