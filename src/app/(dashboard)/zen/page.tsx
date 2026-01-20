@@ -26,6 +26,7 @@ export default function ZenPage() {
   // Get projects and task operations from unified project-store (Supabase)
   const {
     projects,
+    tasks: allTasks,
     isInitialized: projectsInitialized,
     isLoading: projectsLoading,
     fetchAll,
@@ -47,7 +48,6 @@ export default function ZenPage() {
     currentTimerTaskType,
     setTimerTask,
     clearTimerTask,
-    getCurrentTimerTask,
     timerTargetMinutes,
   } = useZenStore();
 
@@ -65,7 +65,17 @@ export default function ZenPage() {
 
   // Find active project from unified store
   const activeProject = projects.find((p) => p.id === activeProjectId && p.status === "active");
-  const currentTask = getCurrentTimerTask();
+
+  // Get current timer task from project-store (unified)
+  const currentTask = currentTimerTaskId
+    ? (() => {
+        const task = allTasks.find((t) => t.id === currentTimerTaskId);
+        if (task) {
+          return { id: task.id, title: task.title, emoji: task.emoji || undefined };
+        }
+        return null;
+      })()
+    : null;
 
   // Show task complete dialog when timer completes
   useEffect(() => {

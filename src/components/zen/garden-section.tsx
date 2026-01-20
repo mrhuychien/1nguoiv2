@@ -13,8 +13,11 @@ import {
   Play,
 } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
-import { TaskStatus } from "@/types/zen";
+import { useProjectStore } from "@/store/project-store";
+import { Task } from "@/types/database.types";
 import { cn } from "@/lib/utils";
+
+type TaskStatus = Task["status"];
 
 interface GardenSectionProps {
   className?: string;
@@ -64,50 +67,52 @@ interface DisplayTask {
 }
 
 export function GardenSection({ className }: GardenSectionProps) {
+  // Get unified project/task data from project-store
   const {
     projects,
-    activeProjectId,
-    activeTaskId,
-    setActiveTask,
-    completeTask,
-    deleteTask,
-    addTask,
-    // Template task actions
-    getProjectTemplateTasks,
-    completeTemplateTask,
-    skipTemplateTask,
-    startTemplateTask,
-  } = useZenStore();
+    getTemplateTasks,
+    getManualTasks,
+    createTask,
+    deleteTaskFromDb,
+    completeTemplateTask: completeTemplateTaskInDb,
+    skipTemplateTask: skipTemplateTaskInDb,
+    startTemplateTask: startTemplateTaskInDb,
+    toggleTaskCompleteInDb,
+  } = useProjectStore();
+
+  // Get UI state from zen-store
+  const { activeProjectId, activeTaskId, setActiveTask, setTimerTask } = useZenStore();
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [showAddTask, setShowAddTask] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"all" | "template" | "manual">("all");
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
 
-  // Get regular tasks
-  const regularTasks: DisplayTask[] = (activeProject?.tasks || []).map((t) => ({
+  // Get template tasks from project-store
+  const dbTemplateTasks = activeProjectId ? getTemplateTasks(activeProjectId) : [];
+  const templateTasks: DisplayTask[] = dbTemplateTasks.map((t) => ({
     id: t.id,
     title: t.title,
     status: t.status,
-    estimatedMinutes: t.estimatedMinutes,
-    isTemplate: false,
+    estimatedMinutes: t.estimated_minutes,
+    emoji: t.emoji || undefined,
+    isTemplate: true,
+    zone: t.zone || undefined,
+    phase: t.phase || undefined,
   }));
 
-  // Get template tasks for this project
-  const templateTasks: DisplayTask[] = activeProjectId
-    ? getProjectTemplateTasks(activeProjectId).map((t) => ({
-        id: t.id,
-        title: t.title,
-        status: t.status,
-        estimatedMinutes: t.estimatedMinutes,
-        emoji: t.emoji,
-        isTemplate: true,
-        zone: t.zone,
-        phase: t.phase,
-      }))
-    : [];
+  // Get manual tasks from project-store
+  const dbManualTasks = activeProjectId ? getManualTasks(activeProjectId) : [];
+  const regularTasks: DisplayTask[] = dbManualTasks.map((t) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    estimatedMinutes: t.estimated_minutes,
+    isTemplate: false,
+  }));
 
   // Combine tasks based on view mode
   let allTasks: DisplayTask[] = [];
@@ -131,10 +136,19 @@ export function GardenSection({ className }: GardenSectionProps) {
     return order[a.status] - order[b.status];
   });
 
-  const handleAddTask = () => {
-    if (!newTaskTitle.trim() || !activeProjectId) return;
+  const handleAddTask = async () => {
+    if (!newTaskTitle.trim() || !activeProjectId || !activeProject) return;
 
-    addTask(activeProjectId, newTaskTitle.trim(), 30);
+    await createTask({
+      user_id: activeProject.user_id,
+      project_id: activeProjectId,
+      title: newTaskTitle.trim(),
+      estimated_minutes: 30,
+      status: "pending",
+      completed: false,
+      is_daily_focus: false,
+      is_template: false,
+    });
     setNewTaskTitle("");
     setShowAddTask(false);
   };
@@ -142,28 +156,59 @@ export function GardenSection({ className }: GardenSectionProps) {
   const handleCompleteTask = (task: DisplayTask) => {
     if (!activeProjectId) return;
     if (task.isTemplate) {
-      completeTemplateTask(task.id);
+      completeTemplateTaskInDb(task.id);
     } else {
-      completeTask(activeProjectId, task.id);
+      toggleTaskCompleteInDb(task.id);
     }
   };
 
   const handleStartTask = (task: DisplayTask) => {
     if (task.isTemplate) {
-      startTemplateTask(task.id);
+      startTemplateTaskInDb(task.id);
     }
+    // Also set it as the timer task
+    setTimerTask(task.id, task.isTemplate ? "template" : "manual");
   };
 
   const handleSkipTask = (task: DisplayTask) => {
     if (task.isTemplate) {
-      skipTemplateTask(task.id);
+      skipTemplateTaskInDb(task.id);
     }
   };
 
   const handleDeleteTask = (task: DisplayTask) => {
-    if (!activeProjectId || task.isTemplate) return;
-    deleteTask(activeProjectId, task.id);
+    if (task.isTemplate) return; // Don't allow deleting template tasks
+    deleteTaskFromDb(task.id);
     setExpandedTaskId(null);
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("application/json"));
+      if (data.taskId && data.taskType) {
+        // Set the dropped task as active and start it
+        setActiveTask(data.taskId);
+        if (data.taskType === "template") {
+          startTemplateTaskInDb(data.taskId);
+        }
+      }
+    } catch {
+      // Invalid data
+    }
   };
 
   const hasTemplateTasks = templateTasks.length > 0;
@@ -271,8 +316,16 @@ export function GardenSection({ className }: GardenSectionProps) {
         </div>
       )}
 
-      {/* Task list */}
-      <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
+      {/* Task list - Drop Zone */}
+      <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={cn(
+          "space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar rounded-lg transition-all",
+          isDragOver && "ring-2 ring-cyan-500/50 bg-cyan-500/5"
+        )}
+      >
         {sortedTasks.map((task) => {
           const status = STATUS_CONFIG[task.status];
           const StatusIcon = status.icon;
