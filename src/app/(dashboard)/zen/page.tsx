@@ -16,15 +16,30 @@ import {
   DeepWorkOverlay,
 } from "@/components/zen";
 import { useZenStore, getCurrentZone } from "@/store/zen-store";
-import { useZenData } from "@/hooks/use-zen-data";
+import { useProjectStore } from "@/store/project-store";
+import { useUser } from "@/hooks/use-user";
 import { cn } from "@/lib/utils";
 
 export default function ZenPage() {
+  const { user } = useUser();
+
+  // Get projects and task operations from unified project-store (Supabase)
+  const {
+    projects,
+    isInitialized: projectsInitialized,
+    isLoading: projectsLoading,
+    fetchAll,
+    completeTemplateTask: completeTemplateTaskInDb,
+    startTemplateTask: startTemplateTaskInDb,
+    addTemplateTaskTime: addTemplateTaskTimeInDb,
+    updateTaskInDb,
+  } = useProjectStore();
+
+  // Keep UI and timer state in zen-store
   const {
     setCurrentZone,
     activeProjectId,
-    projects,
-    isInitialized,
+    isInitialized: zenInitialized,
     timerState,
     showTaskCompleteDialog,
     setShowTaskCompleteDialog,
@@ -33,19 +48,23 @@ export default function ZenPage() {
     setTimerTask,
     clearTimerTask,
     getCurrentTimerTask,
-    completeTask,
-    completeTemplateTask,
-    startTemplateTask,
-    addTemplateTaskTime,
     timerTargetMinutes,
   } = useZenStore();
 
-  // Fetch data from Supabase
-  const { isLoading } = useZenData();
+  const isInitialized = projectsInitialized || zenInitialized;
+  const isLoading = projectsLoading;
+
+  // Load data from Supabase on mount
+  useEffect(() => {
+    if (user?.id && !projectsInitialized) {
+      fetchAll(user.id);
+    }
+  }, [user?.id, projectsInitialized, fetchAll]);
 
   const [isDragOver, setIsDragOver] = useState(false);
 
-  const activeProject = projects.find((p) => p.id === activeProjectId);
+  // Find active project from unified store
+  const activeProject = projects.find((p) => p.id === activeProjectId && p.status === "active");
   const currentTask = getCurrentTimerTask();
 
   // Show task complete dialog when timer completes
@@ -54,10 +73,10 @@ export default function ZenPage() {
       setShowTaskCompleteDialog(true);
       // Add time to the task
       if (currentTimerTaskType === "template") {
-        addTemplateTaskTime(currentTimerTaskId, timerTargetMinutes);
+        addTemplateTaskTimeInDb(currentTimerTaskId, timerTargetMinutes);
       }
     }
-  }, [timerState, currentTimerTaskId, currentTimerTaskType, timerTargetMinutes, addTemplateTaskTime, setShowTaskCompleteDialog]);
+  }, [timerState, currentTimerTaskId, currentTimerTaskType, timerTargetMinutes, addTemplateTaskTimeInDb, setShowTaskCompleteDialog]);
 
   // Handle drag events for timer drop zone
   const handleDragOver = (e: React.DragEvent) => {
@@ -80,7 +99,7 @@ export default function ZenPage() {
         setTimerTask(data.taskId, data.taskType);
         // If template task, also start it
         if (data.taskType === "template") {
-          startTemplateTask(data.taskId);
+          startTemplateTaskInDb(data.taskId);
         }
       }
     } catch {
@@ -93,9 +112,14 @@ export default function ZenPage() {
     if (!currentTimerTaskId || !currentTimerTaskType) return;
 
     if (currentTimerTaskType === "template") {
-      completeTemplateTask(currentTimerTaskId);
-    } else if (activeProjectId) {
-      completeTask(activeProjectId, currentTimerTaskId);
+      completeTemplateTaskInDb(currentTimerTaskId);
+    } else {
+      // For manual tasks, update status to completed
+      updateTaskInDb(currentTimerTaskId, {
+        status: "completed",
+        completed: true,
+        completed_at: new Date().toISOString(),
+      });
     }
 
     clearTimerTask();
@@ -192,7 +216,7 @@ export default function ZenPage() {
                           className="text-sm font-medium"
                           style={{ color: activeProject.color }}
                         >
-                          {activeProject.name}
+                          {activeProject.title}
                         </span>
                       </div>
                     )}

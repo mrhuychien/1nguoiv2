@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Plus,
   Folder,
@@ -20,14 +20,20 @@ import {
   GripVertical,
 } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
+import { useProjectStore } from "@/store/project-store";
+import { useUser } from "@/hooks/use-user";
 import { cn } from "@/lib/utils";
 import { TemplateSelector } from "./template-selector";
 import { TemplatePreview } from "./template-preview";
-import type { TemplateId, TaskStatus } from "@/types/zen";
+import type { TemplateId } from "@/types/zen";
+import type { Task } from "@/types/database.types";
 import {
   getTemplateEstimatedTime,
   formatMinutesToHours,
 } from "@/lib/data/project-templates";
+
+// Task status type from database
+type TaskStatus = Task["status"];
 
 interface ProjectSidebarProps {
   className?: string;
@@ -71,15 +77,35 @@ interface DisplayTask {
 }
 
 export function ProjectSidebar({ className }: ProjectSidebarProps) {
+  const { user } = useUser();
+
+  // Get projects and tasks from unified project-store (Supabase)
   const {
-    projects,
+    projects: dbProjects,
+    fetchAll,
+    isInitialized,
+    getTemplateTasks,
+    getManualTasks,
+  } = useProjectStore();
+
+  // Keep UI state in zen-store
+  const {
     activeProjectId,
     setActiveProject,
     setShowNewProjectModal,
-    getProjectTemplateTasks,
   } = useZenStore();
 
   const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
+
+  // Load data from Supabase on mount
+  useEffect(() => {
+    if (user?.id && !isInitialized) {
+      fetchAll(user.id);
+    }
+  }, [user?.id, isInitialized, fetchAll]);
+
+  // Map database projects to display format
+  const projects = dbProjects.filter(p => p.status === "active");
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -103,9 +129,9 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
           const isExpanded = expandedProjectId === project.id;
           const Icon = ICONS[project.icon] || Folder;
 
-          // Get both template and manual tasks
-          const templateTasks = getProjectTemplateTasks(project.id);
-          const manualTasks = project.tasks || [];
+          // Get both template and manual tasks from unified store
+          const templateTasks = getTemplateTasks(project.id);
+          const manualTasks = getManualTasks(project.id);
 
           // Combine into display tasks
           const allTasks: DisplayTask[] = [
@@ -113,15 +139,15 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
               id: t.id,
               title: t.title,
               status: t.status,
-              estimatedMinutes: t.estimatedMinutes,
-              emoji: t.emoji,
+              estimatedMinutes: t.estimated_minutes,
+              emoji: t.emoji || undefined,
               isTemplate: true,
             })),
             ...manualTasks.map((t) => ({
               id: t.id,
               title: t.title,
               status: t.status,
-              estimatedMinutes: t.estimatedMinutes,
+              estimatedMinutes: t.estimated_minutes,
               isTemplate: false,
             })),
           ];
@@ -200,7 +226,7 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
                         isActive ? "text-white" : "text-gray-300"
                       )}
                     >
-                      {project.name}
+                      {project.title}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-1">
@@ -296,12 +322,14 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
 
 // New Project Modal with Template Support
 export function NewProjectModal() {
-  const {
-    showNewProjectModal,
-    setShowNewProjectModal,
-    addProject,
-    addProjectWithTemplate,
-  } = useZenStore();
+  const { user } = useUser();
+
+  // Use unified project-store for data operations
+  const { createProject, createProjectWithTemplate, isLoading } = useProjectStore();
+
+  // Keep UI state in zen-store
+  const { showNewProjectModal, setShowNewProjectModal } = useZenStore();
+
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState("");
   const [color, setColor] = useState(COLORS[0]);
@@ -321,13 +349,27 @@ export function NewProjectModal() {
     setStep(1);
   };
 
-  const handleSubmit = () => {
-    if (!name.trim()) return;
+  const handleSubmit = async () => {
+    if (!name.trim() || !user?.id) return;
 
     if (templateId === "blank") {
-      addProject(name.trim(), color, icon);
+      // Create blank project
+      await createProject({
+        user_id: user.id,
+        title: name.trim(),
+        color,
+        icon,
+        status: "active",
+        lifecycle: "idea",
+        health: "on-track",
+        is_focus: false,
+        progress: 0,
+        total_minutes: 0,
+        completed_minutes: 0,
+      });
     } else {
-      addProjectWithTemplate(name.trim(), color, icon, templateId);
+      // Create project with template tasks
+      await createProjectWithTemplate(user.id, name.trim(), color, icon, templateId);
     }
 
     // Reset
@@ -337,6 +379,7 @@ export function NewProjectModal() {
     setTemplateId("web-app");
     setStep(1);
     setShowPreview(false);
+    setShowNewProjectModal(false);
   };
 
   const handleClose = () => {
@@ -480,16 +523,18 @@ export function NewProjectModal() {
               <button
                 type="button"
                 onClick={handleBack}
-                className="flex-1 py-3 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
+                disabled={isLoading}
+                className="flex-1 py-3 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 disabled:opacity-50 transition-colors"
               >
                 ← Quay lại
               </button>
               <button
                 type="button"
                 onClick={handleSubmit}
-                className="flex-1 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-medium hover:from-cyan-400 hover:to-purple-400 transition-colors"
+                disabled={isLoading}
+                className="flex-1 py-3 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-medium hover:from-cyan-400 hover:to-purple-400 disabled:opacity-50 transition-colors"
               >
-                Tạo dự án
+                {isLoading ? "Đang tạo..." : "Tạo dự án"}
               </button>
             </div>
           </div>
