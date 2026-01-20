@@ -128,13 +128,38 @@ export function Canvas() {
 
     simulationRef.current = simulation;
 
-    // In edit mode, stop simulation immediately and fix all nodes in place
+    // Check if nodes have valid positions (from database)
+    const nodesNeedLayout = nodes.some((n) =>
+      n.x === undefined || n.y === undefined || n.x === null || n.y === null ||
+      (n.x === 0 && n.y === 0)
+    );
+
+    // In edit mode, we need to handle layout carefully
     if (editMode) {
-      simulation.stop();
-      nodes.forEach((n) => {
-        n.fx = n.x;
-        n.fy = n.y;
-      });
+      if (nodesNeedLayout) {
+        // Nodes don't have saved positions - run simulation briefly to calculate layout
+        // Then stop and fix all nodes
+        simulation.alpha(1);
+        // Run simulation synchronously for a number of ticks to get stable positions
+        for (let i = 0; i < 300; i++) {
+          simulation.tick();
+        }
+        simulation.stop();
+        // Fix all nodes at their calculated positions and save to database
+        nodes.forEach((n) => {
+          n.fx = n.x;
+          n.fy = n.y;
+          // Save the calculated position
+          saveNodePosition(n.id);
+        });
+      } else {
+        // Nodes have valid positions - just stop simulation and fix them
+        simulation.stop();
+        nodes.forEach((n) => {
+          n.fx = n.x;
+          n.fy = n.y;
+        });
+      }
     }
 
     // Create links (edges)
@@ -320,8 +345,8 @@ export function Canvas() {
       addNode(realX, realY, userId);
     });
 
-    // Update positions on each tick
-    simulation.on("tick", () => {
+    // Function to update visual positions
+    const updatePositions = () => {
       link
         .attr("x1", (d) => (d.source as D3Node).x!)
         .attr("y1", (d) => (d.source as D3Node).y!)
@@ -329,7 +354,15 @@ export function Canvas() {
         .attr("y2", (d) => (d.target as D3Node).y!);
 
       node.attr("transform", (d) => `translate(${d.x}, ${d.y})`);
-    });
+    };
+
+    // Update positions on each tick
+    simulation.on("tick", updatePositions);
+
+    // In edit mode, manually update positions once (simulation is stopped)
+    if (editMode) {
+      updatePositions();
+    }
 
     // Drag functions
     function dragstarted(event: d3.D3DragEvent<SVGGElement, D3Node, D3Node>) {
