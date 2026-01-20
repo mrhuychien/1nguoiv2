@@ -29,9 +29,14 @@ export function Canvas() {
   const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const nodesDataRef = useRef<D3Node[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const currentTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [editMode, setEditMode] = useState(true); // Start in edit mode by default
   const [selectedNodePosition, setSelectedNodePosition] = useState<{ x: number; y: number } | null>(null);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editingNodeTitle, setEditingNodeTitle] = useState("");
+  const [editingNodePosition, setEditingNodePosition] = useState<{ x: number; y: number } | null>(null);
+  const inlineInputRef = useRef<HTMLInputElement>(null);
 
   // Load data from Supabase
   const { isLoading, userId } = useIdeaData();
@@ -42,6 +47,7 @@ export function Canvas() {
     addNode,
     addLink,
     deleteNode,
+    updateNode,
     selectNode,
     selectedNodeId,
     searchQuery,
@@ -72,18 +78,27 @@ export function Canvas() {
       .attr("height", height)
       .style("background", "#0a0a0f");
 
+    // Create main group for zoom/pan
+    const g = svg.append("g");
+
     // Create zoom behavior
     const zoom = d3.zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.1, 4])
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
+        // Save current transform for preservation across re-renders
+        currentTransformRef.current = event.transform;
       });
 
     svg.call(zoom);
     zoomRef.current = zoom;
 
-    // Create main group for zoom/pan
-    const g = svg.append("g");
+    // Restore previous transform or use initial
+    const savedTransform = currentTransformRef.current;
+    if (savedTransform && savedTransform !== d3.zoomIdentity) {
+      svg.call(zoom.transform, savedTransform);
+      g.attr("transform", savedTransform.toString());
+    }
 
     // Prepare data
     const nodes: D3Node[] = storeNodes.map((n) => ({
@@ -335,14 +350,29 @@ export function Canvas() {
       setSelectedNodePosition(null);
     });
 
-    // Double click to add new node
+    // Double click to add new node with inline editing
     svg.on("dblclick", (event) => {
       if (!userId) return;
       const [x, y] = d3.pointer(event);
       const transform = d3.zoomTransform(svg.node()!);
       const realX = (x - transform.x) / transform.k;
       const realY = (y - transform.y) / transform.k;
-      addNode(realX, realY, userId);
+      addNode(realX, realY, userId).then((newNodeId) => {
+        if (newNodeId) {
+          // Calculate screen position for inline editing
+          const screenX = realX * transform.k + transform.x;
+          const screenY = realY * transform.k + transform.y;
+          setEditingNodeId(newNodeId);
+          setEditingNodeTitle("Ý tưởng mới");
+          setEditingNodePosition({ x: screenX, y: screenY });
+          setTimeout(() => {
+            if (inlineInputRef.current) {
+              inlineInputRef.current.focus();
+              inlineInputRef.current.select();
+            }
+          }, 50);
+        }
+      });
     });
 
     // Function to update visual positions
@@ -390,11 +420,14 @@ export function Canvas() {
       saveNodePosition(event.subject.id);
     }
 
-    // Initial zoom to fit
-    const initialTransform = d3.zoomIdentity
-      .translate(width / 4, height / 4)
-      .scale(0.8);
-    svg.call(zoom.transform, initialTransform);
+    // Initial zoom to fit - only if no saved transform
+    if (currentTransformRef.current === d3.zoomIdentity) {
+      const initialTransform = d3.zoomIdentity
+        .translate(width / 4, height / 4)
+        .scale(0.8);
+      svg.call(zoom.transform, initialTransform);
+      currentTransformRef.current = initialTransform;
+    }
 
     // Cleanup
     return () => {
@@ -558,6 +591,40 @@ export function Canvas() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [reheat, selectedNodeId, deleteNode, selectNode, handleStartConnectMode, cancelConnectMode, isSearchOpen, clearSearch, toggleSearch]);
 
+  // Start inline editing for a node
+  const startInlineEditing = useCallback((nodeId: string, nodeX: number, nodeY: number) => {
+    const transform = currentTransformRef.current;
+    const screenX = nodeX * transform.k + transform.x;
+    const screenY = nodeY * transform.k + transform.y;
+    setEditingNodeId(nodeId);
+    setEditingNodeTitle("Ý tưởng mới");
+    setEditingNodePosition({ x: screenX, y: screenY });
+    // Focus the input after a short delay to ensure it's rendered
+    setTimeout(() => {
+      if (inlineInputRef.current) {
+        inlineInputRef.current.focus();
+        inlineInputRef.current.select();
+      }
+    }, 50);
+  }, []);
+
+  // Save inline edit
+  const saveInlineEdit = useCallback(() => {
+    if (editingNodeId && editingNodeTitle.trim()) {
+      updateNode(editingNodeId, { title: editingNodeTitle.trim() });
+    }
+    setEditingNodeId(null);
+    setEditingNodeTitle("");
+    setEditingNodePosition(null);
+  }, [editingNodeId, editingNodeTitle, updateNode]);
+
+  // Cancel inline edit
+  const cancelInlineEdit = useCallback(() => {
+    setEditingNodeId(null);
+    setEditingNodeTitle("");
+    setEditingNodePosition(null);
+  }, []);
+
   // Show loading state
   if (isLoading) {
     return (
@@ -573,6 +640,35 @@ export function Canvas() {
   return (
     <div ref={containerRef} className="w-full h-full relative bg-[#0a0a0f]">
       <svg ref={svgRef} className="w-full h-full" />
+
+      {/* Inline Node Title Editor */}
+      {editingNodeId && editingNodePosition && (
+        <div
+          className="absolute z-50"
+          style={{
+            left: editingNodePosition.x,
+            top: editingNodePosition.y + 30,
+            transform: 'translateX(-50%)',
+          }}
+        >
+          <input
+            ref={inlineInputRef}
+            type="text"
+            value={editingNodeTitle}
+            onChange={(e) => setEditingNodeTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                saveInlineEdit();
+              } else if (e.key === 'Escape') {
+                cancelInlineEdit();
+              }
+            }}
+            onBlur={saveInlineEdit}
+            className="px-3 py-1.5 bg-black/90 border border-cyan-500/50 rounded-lg text-white text-sm outline-none focus:border-cyan-400 min-w-[150px] text-center"
+            placeholder="Nhập tiêu đề..."
+          />
+        </div>
+      )}
 
       {/* Graph Selector and Search Bar */}
       <div className="absolute top-4 left-4 flex items-center gap-2">
@@ -660,10 +756,12 @@ export function Canvas() {
                 const distance = 80 + Math.random() * 40;
                 const newX = selectedNode.x + Math.cos(angle) * distance;
                 const newY = selectedNode.y + Math.sin(angle) * distance;
-                // Add node and immediately connect it
+                // Add node and immediately connect it, then start inline editing
                 addNode(newX, newY, userId).then((newNodeId) => {
                   if (newNodeId && selectedNodeId) {
                     addLink(selectedNodeId, newNodeId, userId);
+                    // Start inline editing for the new node
+                    startInlineEditing(newNodeId, newX, newY);
                   }
                 });
               }
@@ -717,9 +815,10 @@ export function Canvas() {
             const container = containerRef.current;
             if (!container || !userId) return;
 
-            // Calculate position for new node
-            let newX = container.clientWidth / 2;
-            let newY = container.clientHeight / 2;
+            // Calculate position for new node - convert screen center to graph coordinates
+            const transform = currentTransformRef.current;
+            let newX = (container.clientWidth / 2 - transform.x) / transform.k;
+            let newY = (container.clientHeight / 2 - transform.y) / transform.k;
 
             // If there's a selected node, create near it
             if (selectedNodeId) {
@@ -742,7 +841,12 @@ export function Canvas() {
               }
             }
 
-            addNode(newX, newY, userId);
+            // Add node and start inline editing
+            addNode(newX, newY, userId).then((newNodeId) => {
+              if (newNodeId) {
+                startInlineEditing(newNodeId, newX, newY);
+              }
+            });
           }}
           className="h-8 w-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
           title="Thêm node (Double-click)"
