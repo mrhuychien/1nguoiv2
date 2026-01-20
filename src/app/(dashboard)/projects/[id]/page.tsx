@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  RotateCcw,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -142,6 +143,7 @@ export default function ProjectDetailPage() {
     completeTemplateTask: completeTemplateTaskInDb,
     skipTemplateTask: skipTemplateTaskInDb,
     startTemplateTask: startTemplateTaskInDb,
+    resetTemplateTask: resetTemplateTaskInDb,
   } = useProjectStore();
 
   // Get zen-store data for Zen Focus projects (legacy - will be removed)
@@ -151,6 +153,7 @@ export default function ProjectDetailPage() {
     completeTemplateTask: completeZenTemplateTask,
     skipTemplateTask: skipZenTemplateTask,
     startTemplateTask: startZenTemplateTask,
+    resetTemplateTask: resetZenTemplateTask,
     deleteProject: deleteZenProject,
     addTask: addZenTask,
   } = useZenStore();
@@ -755,6 +758,24 @@ export default function ProjectDetailPage() {
                                 Bỏ qua
                               </Button>
                             </>
+                          )}
+                          {(isCompleted || isSkipped) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs text-orange-400 hover:bg-orange-500/10"
+                              onClick={() => {
+                                if (isDbTemplateTasks) {
+                                  resetTemplateTaskInDb(task.id);
+                                } else {
+                                  resetZenTemplateTask(task.id);
+                                }
+                              }}
+                              title="Hoàn tác về trạng thái chưa làm"
+                            >
+                              <RotateCcw className="h-3 w-3 mr-1" />
+                              Hoàn tác
+                            </Button>
                           )}
                         </>
                       ) : (

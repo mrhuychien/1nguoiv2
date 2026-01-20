@@ -112,6 +112,7 @@ interface ZenStoreActions {
   completeTemplateTask: (taskId: string) => void;
   skipTemplateTask: (taskId: string) => void;
   startTemplateTask: (taskId: string) => void;
+  resetTemplateTask: (taskId: string) => void;
   updateTemplateTaskNotes: (taskId: string, notes: string) => void;
   addTemplateTaskTime: (taskId: string, minutes: number) => void;
 
@@ -478,6 +479,48 @@ export const useZenStore = create<ZenStore>()(
         });
 
         get().updateTemplateTaskStatus(taskId, "in_progress");
+      },
+
+      resetTemplateTask: (taskId) => {
+        // Reset task back to pending status
+        const task = get().templateTasks.find((t) => t.id === taskId);
+        if (!task) return;
+
+        set({
+          templateTasks: get().templateTasks.map((t) =>
+            t.id === taskId
+              ? { ...t, status: "pending" as TaskStatus, completedAt: null }
+              : t
+          ),
+        });
+
+        // Update project progress
+        const projectTasks = get().getProjectTemplateTasks(task.projectId);
+        const completedCount = projectTasks.filter(
+          (t) => t.id !== taskId && t.status === "completed"
+        ).length;
+        const currentPhase =
+          projectTasks.find(
+            (t) => t.status === "in_progress" || t.status === "pending"
+          )?.phase || 1;
+
+        const completedMinutes = projectTasks
+          .filter((t) => t.id !== taskId && t.status === "completed")
+          .reduce((sum, t) => sum + t.timeSpentMinutes, 0);
+
+        set({
+          projects: get().projects.map((p) =>
+            p.id === task.projectId
+              ? {
+                  ...p,
+                  completedTasks: completedCount,
+                  currentPhase,
+                  completedMinutes,
+                  updatedAt: new Date(),
+                }
+              : p
+          ),
+        });
       },
 
       updateTemplateTaskNotes: (taskId, notes) => {

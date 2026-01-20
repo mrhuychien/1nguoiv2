@@ -48,6 +48,7 @@ interface ProjectActions {
   startTemplateTask: (taskId: string) => Promise<void>;
   completeTemplateTask: (taskId: string) => Promise<void>;
   skipTemplateTask: (taskId: string) => Promise<void>;
+  resetTemplateTask: (taskId: string) => Promise<void>;
   addTemplateTaskTime: (taskId: string, minutes: number) => Promise<void>;
 
   // Local state operations (for optimistic updates)
@@ -584,6 +585,55 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       }
     } catch (error) {
       console.error("Error skipping template task:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  resetTemplateTask: async (taskId: string) => {
+    const task = get().tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    // Optimistic update - reset to pending
+    get().updateTask(taskId, {
+      status: "pending",
+      completed: false,
+      completed_at: null,
+    });
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { error } = await supabaseAny
+        .from("tasks")
+        .update({
+          status: "pending",
+          completed: false,
+          completed_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", taskId);
+
+      if (error) throw error;
+
+      // Update project progress
+      if (task.project_id) {
+        const projectTasks = get().getTemplateTasks(task.project_id);
+        // Re-count after optimistic update
+        const completedCount = projectTasks.filter(
+          (t) => t.id !== taskId && (t.status === "completed" || t.status === "skipped")
+        ).length;
+        const completedMinutes = projectTasks
+          .filter((t) => t.id !== taskId && t.status === "completed")
+          .reduce((sum, t) => sum + (t.actual_minutes || 0), 0);
+
+        await get().updateProjectInDb(task.project_id, {
+          completed_tasks: completedCount,
+          completed_minutes: completedMinutes,
+        });
+      }
+    } catch (error) {
+      console.error("Error resetting template task:", error);
       set({ error: (error as Error).message });
     }
   },

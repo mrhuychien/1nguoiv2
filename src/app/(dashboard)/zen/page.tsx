@@ -325,14 +325,25 @@ export default function ZenPage() {
                         <span className="text-sm font-medium text-white">
                           {currentTask.title}
                         </span>
-                        {timerState === "idle" && (
+                        <div className="flex items-center gap-1 ml-auto">
+                          {/* Done button */}
                           <button
-                            onClick={handleClearTask}
-                            className="ml-2 p-1 rounded hover:bg-gray-700/50 text-gray-400 hover:text-white transition-colors"
+                            onClick={handleCompleteTask}
+                            className="p-1.5 rounded-lg bg-green-500/20 text-green-400 hover:bg-green-500/30 transition-colors"
+                            title="Đánh dấu hoàn thành"
                           >
-                            <X className="w-3 h-3" />
+                            <CheckCircle2 className="w-4 h-4" />
                           </button>
-                        )}
+                          {timerState === "idle" && (
+                            <button
+                              onClick={handleClearTask}
+                              className="p-1.5 rounded-lg hover:bg-gray-700/50 text-gray-400 hover:text-white transition-colors"
+                              title="Gỡ task"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ) : (
                       <div className={cn(

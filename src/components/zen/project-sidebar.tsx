@@ -18,7 +18,9 @@ import {
   Clock,
   SkipForward,
   GripVertical,
+  Eye,
 } from "lucide-react";
+import Link from "next/link";
 import { useZenStore } from "@/store/zen-store";
 import { useProjectStore } from "@/store/project-store";
 import { useUser } from "@/hooks/use-user";
@@ -191,7 +193,7 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
               <button
                 onClick={handleProjectClick}
                 className={cn(
-                  "w-full flex items-center gap-3 p-3 rounded-lg transition-all text-left",
+                  "group w-full flex items-center gap-3 p-3 rounded-lg transition-all text-left",
                   isActive
                     ? "bg-gray-800/80 border border-gray-700"
                     : "hover:bg-gray-800/50"
@@ -245,6 +247,16 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
                     </div>
                   </div>
                 </div>
+
+                {/* View project detail button */}
+                <Link
+                  href={`/projects/${project.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 hover:text-cyan-400 hover:bg-gray-800/50 transition-colors opacity-0 group-hover:opacity-100"
+                  title="Xem chi tiết project"
+                >
+                  <Eye className="w-4 h-4" />
+                </Link>
               </button>
 
               {/* Expandable Task List */}
