@@ -8,6 +8,7 @@ import { useProjectData } from "@/hooks/use-project-data";
 import { ProjectModal } from "@/components/projects/project-modal";
 import { Project } from "@/types/database.types";
 import { Loader2 } from "lucide-react";
+import Link from "next/link";
 import {
   Plus,
   MoreHorizontal,
@@ -25,6 +26,7 @@ import {
   Trash2,
   Play,
   ArrowRight,
+  Eye,
 } from "lucide-react";
 
 type LifecycleFilter = "all" | "idea" | "designing" | "building" | "testing" | "shipped" | "paused";
@@ -283,12 +285,13 @@ function ActiveProjectCard({
         ) : (
           <div />
         )}
-        <button
-          onClick={onEdit}
-          className="text-xs font-semibold text-cyan hover:underline underline-offset-4"
+        <Link
+          href={`/projects/${project.id}`}
+          className="flex items-center gap-1.5 text-xs font-semibold text-cyan hover:underline underline-offset-4"
         >
+          <Eye className="h-3.5 w-3.5" />
           Xem chi tiết
-        </button>
+        </Link>
       </div>
     </Card>
   );
@@ -310,10 +313,10 @@ function IdeaCard({
   return (
     <Card className="p-4 hover:border-yellow-500 transition-all group cursor-pointer relative">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <Lightbulb className="h-5 w-5 text-yellow-500" />
+        <Link href={`/projects/${project.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+          <Lightbulb className="h-5 w-5 text-yellow-500 flex-shrink-0" />
           <h4 className="font-semibold text-sm truncate">{project.title}</h4>
-        </div>
+        </Link>
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
@@ -351,9 +354,11 @@ function IdeaCard({
           )}
         </div>
       </div>
-      <p className="text-xs text-text-muted line-clamp-2 mb-3" onClick={onEdit}>
-        {project.description || "Chưa có mô tả"}
-      </p>
+      <Link href={`/projects/${project.id}`}>
+        <p className="text-xs text-text-muted line-clamp-2 mb-3">
+          {project.description || "Chưa có mô tả"}
+        </p>
+      </Link>
       <div className="flex items-center justify-between pt-3 border-t border-border/50">
         <span className="text-[10px] font-bold text-yellow-500">💡 IDEA</span>
         <span className="text-[10px] text-text-muted">
@@ -366,18 +371,16 @@ function IdeaCard({
 
 function ShippedCard({
   project,
-  onEdit,
   onDelete,
 }: {
   project: Project;
-  onEdit: () => void;
   onDelete: () => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
 
   return (
     <Card className="p-5 flex items-center justify-between group">
-      <div className="flex items-center gap-4" onClick={onEdit}>
+      <Link href={`/projects/${project.id}`} className="flex items-center gap-4 flex-1">
         <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-500">
           <Rocket className="h-5 w-5" />
         </div>
@@ -387,7 +390,7 @@ function ShippedCard({
             Hoàn thành: {project.deadline ? new Date(project.deadline).toLocaleDateString("vi-VN") : "N/A"}
           </p>
         </div>
-      </div>
+      </Link>
       <div className="flex items-center gap-2">
         <span className="px-2 py-1 bg-green-500/10 text-green-500 text-[9px] font-bold rounded uppercase">
           🚀 SHIPPED
@@ -421,12 +424,10 @@ function ShippedCard({
 
 function PausedCard({
   project,
-  onEdit,
   onDelete,
   onResume,
 }: {
   project: Project;
-  onEdit: () => void;
   onDelete: () => void;
   onResume: () => void;
 }) {
@@ -434,7 +435,7 @@ function PausedCard({
 
   return (
     <Card className="p-5 flex items-center justify-between opacity-70 group hover:opacity-100 transition-opacity">
-      <div className="flex items-center gap-4" onClick={onEdit}>
+      <Link href={`/projects/${project.id}`} className="flex items-center gap-4 flex-1">
         <div className="w-10 h-10 rounded-lg bg-slate-500/10 flex items-center justify-center text-slate-500">
           <PauseCircle className="h-5 w-5" />
         </div>
@@ -444,7 +445,7 @@ function PausedCard({
             Tạm dừng từ: {project.updated_at ? new Date(project.updated_at).toLocaleDateString("vi-VN") : "N/A"}
           </p>
         </div>
-      </div>
+      </Link>
       <div className="flex items-center gap-2">
         <span className="px-2 py-1 bg-slate-500/10 text-slate-500 text-[9px] font-bold rounded uppercase">
           ⏸️ PAUSED
@@ -711,7 +712,6 @@ export default function ProjectsPage() {
                     <ShippedCard
                       key={project.id}
                       project={project}
-                      onEdit={() => handleEditProject(project)}
                       onDelete={() => handleDeleteProject(project.id)}
                     />
                   ))}
@@ -731,7 +731,6 @@ export default function ProjectsPage() {
                     <PausedCard
                       key={project.id}
                       project={project}
-                      onEdit={() => handleEditProject(project)}
                       onDelete={() => handleDeleteProject(project.id)}
                       onResume={() => handleResumeProject(project)}
                     />

@@ -9,6 +9,8 @@ import {
   MoreHorizontal,
   Trash2,
   Sprout,
+  SkipForward,
+  Play,
 } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
 import { TaskStatus } from "@/types/zen";
@@ -43,11 +45,23 @@ const STATUS_CONFIG: Record<
     label: "Blocked",
   },
   skipped: {
-    icon: Circle,
+    icon: SkipForward,
     color: "text-gray-500",
     label: "Bỏ qua",
   },
 };
+
+// Unified task type for display
+interface DisplayTask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+  estimatedMinutes: number;
+  emoji?: string;
+  isTemplate: boolean;
+  zone?: string;
+  phase?: number;
+}
 
 export function GardenSection({ className }: GardenSectionProps) {
   const {
@@ -58,17 +72,55 @@ export function GardenSection({ className }: GardenSectionProps) {
     completeTask,
     deleteTask,
     addTask,
+    // Template task actions
+    getProjectTemplateTasks,
+    completeTemplateTask,
+    skipTemplateTask,
+    startTemplateTask,
   } = useZenStore();
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [showAddTask, setShowAddTask] = useState(false);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"all" | "template" | "manual">("all");
 
   const activeProject = projects.find((p) => p.id === activeProjectId);
-  const tasks = activeProject?.tasks || [];
 
-  // Sort tasks: in_progress first, then pending, then completed
-  const sortedTasks = [...tasks].sort((a, b) => {
+  // Get regular tasks
+  const regularTasks: DisplayTask[] = (activeProject?.tasks || []).map((t) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    estimatedMinutes: t.estimatedMinutes,
+    isTemplate: false,
+  }));
+
+  // Get template tasks for this project
+  const templateTasks: DisplayTask[] = activeProjectId
+    ? getProjectTemplateTasks(activeProjectId).map((t) => ({
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        estimatedMinutes: t.estimatedMinutes,
+        emoji: t.emoji,
+        isTemplate: true,
+        zone: t.zone,
+        phase: t.phase,
+      }))
+    : [];
+
+  // Combine tasks based on view mode
+  let allTasks: DisplayTask[] = [];
+  if (viewMode === "all") {
+    allTasks = [...templateTasks, ...regularTasks];
+  } else if (viewMode === "template") {
+    allTasks = templateTasks;
+  } else {
+    allTasks = regularTasks;
+  }
+
+  // Sort tasks: in_progress first, then pending, then completed/skipped
+  const sortedTasks = [...allTasks].sort((a, b) => {
     const order: Record<TaskStatus, number> = {
       in_progress: 0,
       pending: 1,
@@ -87,16 +139,35 @@ export function GardenSection({ className }: GardenSectionProps) {
     setShowAddTask(false);
   };
 
-  const handleCompleteTask = (taskId: string) => {
+  const handleCompleteTask = (task: DisplayTask) => {
     if (!activeProjectId) return;
-    completeTask(activeProjectId, taskId);
+    if (task.isTemplate) {
+      completeTemplateTask(task.id);
+    } else {
+      completeTask(activeProjectId, task.id);
+    }
   };
 
-  const handleDeleteTask = (taskId: string) => {
-    if (!activeProjectId) return;
-    deleteTask(activeProjectId, taskId);
+  const handleStartTask = (task: DisplayTask) => {
+    if (task.isTemplate) {
+      startTemplateTask(task.id);
+    }
+  };
+
+  const handleSkipTask = (task: DisplayTask) => {
+    if (task.isTemplate) {
+      skipTemplateTask(task.id);
+    }
+  };
+
+  const handleDeleteTask = (task: DisplayTask) => {
+    if (!activeProjectId || task.isTemplate) return;
+    deleteTask(activeProjectId, task.id);
     setExpandedTaskId(null);
   };
+
+  const hasTemplateTasks = templateTasks.length > 0;
+  const hasRegularTasks = regularTasks.length > 0;
 
   return (
     <div className={cn("space-y-4", className)}>
@@ -107,6 +178,11 @@ export function GardenSection({ className }: GardenSectionProps) {
           <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
             Garden Tasks
           </h3>
+          {allTasks.length > 0 && (
+            <span className="text-xs text-gray-500">
+              ({sortedTasks.filter((t) => t.status !== "completed" && t.status !== "skipped").length})
+            </span>
+          )}
         </div>
         <button
           onClick={() => setShowAddTask(!showAddTask)}
@@ -120,6 +196,49 @@ export function GardenSection({ className }: GardenSectionProps) {
           <Plus className="w-4 h-4" />
         </button>
       </div>
+
+      {/* View Mode Tabs */}
+      {activeProject && (hasTemplateTasks || hasRegularTasks) && (
+        <div className="flex gap-1 p-1 bg-gray-900/50 rounded-lg">
+          <button
+            onClick={() => setViewMode("all")}
+            className={cn(
+              "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
+              viewMode === "all"
+                ? "bg-gray-800 text-white"
+                : "text-gray-400 hover:text-white"
+            )}
+          >
+            Tất cả ({templateTasks.length + regularTasks.length})
+          </button>
+          {hasTemplateTasks && (
+            <button
+              onClick={() => setViewMode("template")}
+              className={cn(
+                "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
+                viewMode === "template"
+                  ? "bg-gray-800 text-white"
+                  : "text-gray-400 hover:text-white"
+              )}
+            >
+              Template ({templateTasks.length})
+            </button>
+          )}
+          {hasRegularTasks && (
+            <button
+              onClick={() => setViewMode("manual")}
+              className={cn(
+                "flex-1 px-3 py-1.5 text-xs font-medium rounded transition-colors",
+                viewMode === "manual"
+                  ? "bg-gray-800 text-white"
+                  : "text-gray-400 hover:text-white"
+              )}
+            >
+              Thủ công ({regularTasks.length})
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Add task input */}
       {showAddTask && (
@@ -153,7 +272,7 @@ export function GardenSection({ className }: GardenSectionProps) {
       )}
 
       {/* Task list */}
-      <div className="space-y-2">
+      <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar">
         {sortedTasks.map((task) => {
           const status = STATUS_CONFIG[task.status];
           const StatusIcon = status.icon;
@@ -167,8 +286,8 @@ export function GardenSection({ className }: GardenSectionProps) {
                 "group relative rounded-lg border transition-all cursor-pointer",
                 isActive
                   ? "bg-cyan-500/10 border-cyan-500/30"
-                  : task.status === "completed"
-                  ? "bg-gray-900/30 border-gray-800/50"
+                  : task.status === "completed" || task.status === "skipped"
+                  ? "bg-gray-900/30 border-gray-800/50 opacity-60"
                   : "bg-gray-900/50 border-gray-800 hover:bg-gray-800/50"
               )}
               onClick={() => setActiveTask(task.id)}
@@ -178,14 +297,16 @@ export function GardenSection({ className }: GardenSectionProps) {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (task.status !== "completed") {
-                      handleCompleteTask(task.id);
+                    if (task.status !== "completed" && task.status !== "skipped") {
+                      handleCompleteTask(task);
                     }
                   }}
                   className={cn(
                     "flex-shrink-0 transition-transform hover:scale-110",
                     task.status === "completed"
                       ? "text-green-400"
+                      : task.status === "skipped"
+                      ? "text-gray-500"
                       : "text-gray-400 hover:text-cyan-400"
                   )}
                 >
@@ -194,21 +315,43 @@ export function GardenSection({ className }: GardenSectionProps) {
 
                 {/* Task content */}
                 <div className="flex-1 min-w-0">
-                  <p
-                    className={cn(
-                      "text-sm font-medium truncate",
-                      task.status === "completed"
-                        ? "text-gray-500 line-through"
-                        : "text-white"
+                  <div className="flex items-center gap-2">
+                    {task.emoji && (
+                      <span className="text-sm">{task.emoji}</span>
                     )}
-                  >
-                    {task.title}
-                  </p>
-                  {task.estimatedMinutes > 0 && (
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {task.estimatedMinutes}m estimate
+                    <p
+                      className={cn(
+                        "text-sm font-medium truncate",
+                        task.status === "completed" || task.status === "skipped"
+                          ? "text-gray-500 line-through"
+                          : "text-white"
+                      )}
+                    >
+                      {task.title}
                     </p>
-                  )}
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {task.estimatedMinutes > 0 && (
+                      <span className="text-xs text-gray-500">
+                        {task.estimatedMinutes}m
+                      </span>
+                    )}
+                    {task.isTemplate && task.zone && (
+                      <span className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded",
+                        task.zone === "designing"
+                          ? "bg-blue-500/10 text-blue-400"
+                          : "bg-orange-500/10 text-orange-400"
+                      )}>
+                        {task.zone === "designing" ? "Design" : "Build"}
+                      </span>
+                    )}
+                    {task.isTemplate && (
+                      <span className="text-[10px] text-purple-400">
+                        Template
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Actions */}
@@ -226,16 +369,44 @@ export function GardenSection({ className }: GardenSectionProps) {
               {/* Expanded actions */}
               {isExpanded && (
                 <div className="px-3 pb-3 flex items-center gap-2 animate-zen-fade">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteTask(task.id);
-                    }}
-                    className="flex items-center gap-1.5 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    Xóa
-                  </button>
+                  {task.isTemplate && task.status === "pending" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartTask(task);
+                        setExpandedTaskId(null);
+                      }}
+                      className="flex items-center gap-1.5 px-2 py-1 text-xs text-cyan-400 hover:bg-cyan-500/10 rounded transition-colors"
+                    >
+                      <Play className="w-3 h-3" />
+                      Bắt đầu
+                    </button>
+                  )}
+                  {task.isTemplate && task.status === "pending" && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSkipTask(task);
+                        setExpandedTaskId(null);
+                      }}
+                      className="flex items-center gap-1.5 px-2 py-1 text-xs text-gray-400 hover:bg-gray-500/10 rounded transition-colors"
+                    >
+                      <SkipForward className="w-3 h-3" />
+                      Bỏ qua
+                    </button>
+                  )}
+                  {!task.isTemplate && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteTask(task);
+                      }}
+                      className="flex items-center gap-1.5 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Xóa
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -265,14 +436,14 @@ export function GardenSection({ className }: GardenSectionProps) {
       </div>
 
       {/* Task summary */}
-      {activeProject && tasks.length > 0 && (
+      {activeProject && allTasks.length > 0 && (
         <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-800">
           <span>
-            {tasks.filter((t) => t.status === "completed").length} /{" "}
-            {tasks.length} hoàn thành
+            {allTasks.filter((t) => t.status === "completed").length} /{" "}
+            {allTasks.length} hoàn thành
           </span>
           <span>
-            {tasks.reduce((sum, t) => sum + t.estimatedMinutes, 0)}m tổng
+            {allTasks.reduce((sum, t) => sum + t.estimatedMinutes, 0)}m tổng
           </span>
         </div>
       )}
