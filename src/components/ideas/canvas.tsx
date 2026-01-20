@@ -568,9 +568,34 @@ export function Canvas() {
         <button
           onClick={() => {
             const container = containerRef.current;
-            if (container && userId) {
-              addNode(container.clientWidth / 2, container.clientHeight / 2, userId);
+            if (!container || !userId) return;
+
+            // Calculate position for new node
+            let newX = container.clientWidth / 2;
+            let newY = container.clientHeight / 2;
+
+            // If there's a selected node, create near it
+            if (selectedNodeId) {
+              const selectedNode = nodesDataRef.current.find((n) => n.id === selectedNodeId);
+              if (selectedNode && selectedNode.x !== undefined && selectedNode.y !== undefined) {
+                // Random angle to spread nodes around the selected one
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = 80 + Math.random() * 40; // 80-120 pixels away
+                newX = selectedNode.x + Math.cos(angle) * distance;
+                newY = selectedNode.y + Math.sin(angle) * distance;
+              }
+            } else if (storeNodes.length > 0) {
+              // No selection, but has nodes - create near the last node
+              const lastNode = nodesDataRef.current[nodesDataRef.current.length - 1];
+              if (lastNode && lastNode.x !== undefined && lastNode.y !== undefined) {
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = 80 + Math.random() * 40;
+                newX = lastNode.x + Math.cos(angle) * distance;
+                newY = lastNode.y + Math.sin(angle) * distance;
+              }
             }
+
+            addNode(newX, newY, userId);
           }}
           className="h-8 w-8 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
           title="Thêm node (Double-click)"
