@@ -55,6 +55,11 @@ export interface Database {
           completed_minutes: number
           created_at: string
           updated_at: string
+          // Template fields
+          template_id: string | null
+          current_phase: number | null
+          total_tasks: number | null
+          completed_tasks: number | null
         }
         Insert: {
           id?: string
@@ -75,6 +80,11 @@ export interface Database {
           completed_minutes?: number
           created_at?: string
           updated_at?: string
+          // Template fields
+          template_id?: string | null
+          current_phase?: number | null
+          total_tasks?: number | null
+          completed_tasks?: number | null
         }
         Update: {
           id?: string
@@ -95,6 +105,11 @@ export interface Database {
           completed_minutes?: number
           created_at?: string
           updated_at?: string
+          // Template fields
+          template_id?: string | null
+          current_phase?: number | null
+          total_tasks?: number | null
+          completed_tasks?: number | null
         }
       }
       tasks: {
@@ -107,13 +122,18 @@ export interface Database {
           completed: boolean
           is_daily_focus: boolean
           due_date: string | null
-          status: 'pending' | 'in_progress' | 'completed' | 'blocked'
+          status: 'pending' | 'in_progress' | 'completed' | 'blocked' | 'skipped'
           estimated_minutes: number
           actual_minutes: number
           priority: number
           completed_at: string | null
           created_at: string
           updated_at: string
+          // Template task fields
+          emoji: string | null
+          zone: 'designing' | 'building' | null
+          phase: number | null
+          is_template: boolean
         }
         Insert: {
           id?: string
@@ -124,13 +144,18 @@ export interface Database {
           completed?: boolean
           is_daily_focus?: boolean
           due_date?: string | null
-          status?: 'pending' | 'in_progress' | 'completed' | 'blocked'
+          status?: 'pending' | 'in_progress' | 'completed' | 'blocked' | 'skipped'
           estimated_minutes?: number
           actual_minutes?: number
           priority?: number
           completed_at?: string | null
           created_at?: string
           updated_at?: string
+          // Template task fields
+          emoji?: string | null
+          zone?: 'designing' | 'building' | null
+          phase?: number | null
+          is_template?: boolean
         }
         Update: {
           id?: string
@@ -141,13 +166,18 @@ export interface Database {
           completed?: boolean
           is_daily_focus?: boolean
           due_date?: string | null
-          status?: 'pending' | 'in_progress' | 'completed' | 'blocked'
+          status?: 'pending' | 'in_progress' | 'completed' | 'blocked' | 'skipped'
           estimated_minutes?: number
           actual_minutes?: number
           priority?: number
           completed_at?: string | null
           created_at?: string
           updated_at?: string
+          // Template task fields
+          emoji?: string | null
+          zone?: 'designing' | 'building' | null
+          phase?: number | null
+          is_template?: boolean
         }
       }
       graphs: {

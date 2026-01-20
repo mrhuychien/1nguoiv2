@@ -3,6 +3,11 @@
 import { create } from "zustand";
 import { createClient } from "@/lib/supabase/client";
 import { Project, Task, ProjectInsert, TaskInsert } from "@/types/database.types";
+import { TemplateId } from "@/types/zen";
+import {
+  generateTasksFromTemplate,
+  getTemplateById,
+} from "@/lib/data/project-templates";
 
 interface ProjectState {
   projects: Project[];
@@ -18,13 +23,27 @@ interface ProjectActions {
   fetchProjects: (userId: string) => Promise<void>;
   fetchTasks: (userId: string) => Promise<void>;
   createProject: (project: Omit<ProjectInsert, "id" | "created_at" | "updated_at">) => Promise<Project | null>;
+  createProjectWithTemplate: (
+    userId: string,
+    name: string,
+    color: string,
+    icon: string,
+    templateId: TemplateId
+  ) => Promise<Project | null>;
   updateProjectInDb: (id: string, updates: Partial<Project>) => Promise<void>;
   deleteProjectFromDb: (id: string) => Promise<void>;
   createTask: (task: Omit<TaskInsert, "id" | "created_at" | "updated_at">) => Promise<Task | null>;
+  createTemplateTasks: (userId: string, projectId: string, templateId: TemplateId) => Promise<void>;
   updateTaskInDb: (id: string, updates: Partial<Task>) => Promise<void>;
   deleteTaskFromDb: (id: string) => Promise<void>;
   toggleTaskCompleteInDb: (id: string) => Promise<void>;
   setFocusProjectInDb: (userId: string, projectId: string) => Promise<void>;
+
+  // Template task operations
+  startTemplateTask: (taskId: string) => Promise<void>;
+  completeTemplateTask: (taskId: string) => Promise<void>;
+  skipTemplateTask: (taskId: string) => Promise<void>;
+  addTemplateTaskTime: (taskId: string, minutes: number) => Promise<void>;
 
   // Local state operations (for optimistic updates)
   setProjects: (projects: Project[]) => void;
@@ -48,6 +67,10 @@ interface ProjectGetters {
   getDailyFocusTasks: () => Task[];
   getProjectTasks: (projectId: string) => Task[];
   getProjectById: (id: string) => Project | undefined;
+  // Template task getters
+  getTemplateTasks: (projectId: string) => Task[];
+  getManualTasks: (projectId: string) => Task[];
+  getCurrentTemplateTask: (projectId: string) => Task | null;
 }
 
 type ProjectStore = ProjectState & ProjectActions & ProjectGetters;
@@ -159,6 +182,97 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       return null;
     } finally {
       set({ isLoading: false });
+    }
+  },
+
+  createProjectWithTemplate: async (userId, name, color, icon, templateId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const template = getTemplateById(templateId);
+      const totalMinutes = template
+        ? template.tasks.reduce((sum, t) => sum + t.estimatedMinutes, 0)
+        : 0;
+
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+
+      // Create project with template info
+      const { data: project, error: projectError } = await supabaseAny
+        .from("projects")
+        .insert({
+          user_id: userId,
+          title: name,
+          color,
+          icon,
+          template_id: templateId,
+          total_minutes: totalMinutes,
+          total_tasks: template?.tasks.length || 0,
+          completed_tasks: 0,
+          current_phase: 1,
+          lifecycle: "building",
+          status: "active",
+        })
+        .select()
+        .single();
+
+      if (projectError) throw projectError;
+
+      if (project) {
+        // Add project to state
+        set((state) => ({ projects: [project, ...state.projects] }));
+
+        // Create template tasks
+        await get().createTemplateTasks(userId, project.id, templateId);
+      }
+
+      return project;
+    } catch (error) {
+      console.error("Error creating project with template:", error);
+      set({ error: (error as Error).message });
+      return null;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  createTemplateTasks: async (userId, projectId, templateId) => {
+    try {
+      const templateTasks = generateTasksFromTemplate(projectId, templateId);
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+
+      // Convert to database format
+      const tasksToInsert = templateTasks.map((t) => ({
+        user_id: userId,
+        project_id: projectId,
+        title: t.title,
+        emoji: t.emoji,
+        zone: t.zone,
+        phase: t.phase,
+        estimated_minutes: t.estimatedMinutes,
+        actual_minutes: 0,
+        status: "pending",
+        is_template: true,
+        completed: false,
+        is_daily_focus: false,
+        priority: t.phase,
+      }));
+
+      const { data, error } = await supabaseAny
+        .from("tasks")
+        .insert(tasksToInsert)
+        .select();
+
+      if (error) throw error;
+
+      if (data) {
+        set((state) => ({ tasks: [...data, ...state.tasks] }));
+      }
+    } catch (error) {
+      console.error("Error creating template tasks:", error);
+      set({ error: (error as Error).message });
     }
   },
 
@@ -327,6 +441,170 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
   },
 
+  // Template task operations
+  startTemplateTask: async (taskId: string) => {
+    const task = get().tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    // Set all other in_progress tasks to pending first (for same project)
+    const projectId = task.project_id;
+    const tasksToUpdate = get().tasks.filter(
+      (t) => t.project_id === projectId && t.status === "in_progress"
+    );
+
+    // Optimistic update
+    set((state) => ({
+      tasks: state.tasks.map((t) => {
+        if (t.project_id === projectId && t.status === "in_progress") {
+          return { ...t, status: "pending" as const };
+        }
+        if (t.id === taskId) {
+          return { ...t, status: "in_progress" as const };
+        }
+        return t;
+      }),
+    }));
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+
+      // Update other in_progress tasks
+      for (const t of tasksToUpdate) {
+        await supabaseAny
+          .from("tasks")
+          .update({ status: "pending", updated_at: new Date().toISOString() })
+          .eq("id", t.id);
+      }
+
+      // Set this task to in_progress
+      const { error } = await supabaseAny
+        .from("tasks")
+        .update({ status: "in_progress", updated_at: new Date().toISOString() })
+        .eq("id", taskId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error starting template task:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  completeTemplateTask: async (taskId: string) => {
+    const task = get().tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    // Optimistic update
+    get().updateTask(taskId, {
+      status: "completed",
+      completed: true,
+      completed_at: new Date().toISOString(),
+    });
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { error } = await supabaseAny
+        .from("tasks")
+        .update({
+          status: "completed",
+          completed: true,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", taskId);
+
+      if (error) throw error;
+
+      // Update project progress
+      if (task.project_id) {
+        const projectTasks = get().getTemplateTasks(task.project_id);
+        const completedCount = projectTasks.filter(
+          (t) => t.status === "completed" || t.status === "skipped"
+        ).length;
+        const completedMinutes = projectTasks
+          .filter((t) => t.status === "completed")
+          .reduce((sum, t) => sum + (t.actual_minutes || 0), 0);
+
+        await get().updateProjectInDb(task.project_id, {
+          completed_tasks: completedCount,
+          completed_minutes: completedMinutes,
+        });
+      }
+    } catch (error) {
+      console.error("Error completing template task:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  skipTemplateTask: async (taskId: string) => {
+    const task = get().tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    // Optimistic update
+    get().updateTask(taskId, { status: "skipped" });
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { error } = await supabaseAny
+        .from("tasks")
+        .update({
+          status: "skipped",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", taskId);
+
+      if (error) throw error;
+
+      // Update project progress
+      if (task.project_id) {
+        const projectTasks = get().getTemplateTasks(task.project_id);
+        const completedCount = projectTasks.filter(
+          (t) => t.status === "completed" || t.status === "skipped"
+        ).length;
+
+        await get().updateProjectInDb(task.project_id, {
+          completed_tasks: completedCount,
+        });
+      }
+    } catch (error) {
+      console.error("Error skipping template task:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  addTemplateTaskTime: async (taskId: string, minutes: number) => {
+    const task = get().tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    const newMinutes = (task.actual_minutes || 0) + minutes;
+
+    // Optimistic update
+    get().updateTask(taskId, { actual_minutes: newMinutes });
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { error } = await supabaseAny
+        .from("tasks")
+        .update({
+          actual_minutes: newMinutes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", taskId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Error adding task time:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
   // ========== LOCAL STATE OPERATIONS ==========
 
   setProjects: (projects) => set({ projects }),
@@ -406,6 +684,24 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     get().tasks.filter((t) => t.project_id === projectId),
 
   getProjectById: (id) => get().projects.find((p) => p.id === id),
+
+  // Template task getters
+  getTemplateTasks: (projectId) =>
+    get()
+      .tasks.filter((t) => t.project_id === projectId && t.is_template)
+      .sort((a, b) => (a.phase || 0) - (b.phase || 0)),
+
+  getManualTasks: (projectId) =>
+    get().tasks.filter((t) => t.project_id === projectId && !t.is_template),
+
+  getCurrentTemplateTask: (projectId) => {
+    const tasks = get().getTemplateTasks(projectId);
+    return (
+      tasks.find((t) => t.status === "in_progress") ||
+      tasks.find((t) => t.status === "pending") ||
+      null
+    );
+  },
 }));
 
 // Mock data for demo - Project Lifecycle
@@ -430,6 +726,10 @@ export const mockProjects: Project[] = [
     completed_minutes: 245,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    template_id: null,
+    current_phase: null,
+    total_tasks: null,
+    completed_tasks: null,
   },
   {
     id: "2",
@@ -450,6 +750,10 @@ export const mockProjects: Project[] = [
     completed_minutes: 108,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    template_id: null,
+    current_phase: null,
+    total_tasks: null,
+    completed_tasks: null,
   },
   {
     id: "3",
@@ -470,6 +774,10 @@ export const mockProjects: Project[] = [
     completed_minutes: 324,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    template_id: null,
+    current_phase: null,
+    total_tasks: null,
+    completed_tasks: null,
   },
   // Ideas
   {
@@ -491,6 +799,10 @@ export const mockProjects: Project[] = [
     completed_minutes: 0,
     created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    template_id: null,
+    current_phase: null,
+    total_tasks: null,
+    completed_tasks: null,
   },
   {
     id: "5",
@@ -511,6 +823,10 @@ export const mockProjects: Project[] = [
     completed_minutes: 0,
     created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    template_id: null,
+    current_phase: null,
+    total_tasks: null,
+    completed_tasks: null,
   },
   {
     id: "6",
@@ -531,6 +847,10 @@ export const mockProjects: Project[] = [
     completed_minutes: 0,
     created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    template_id: null,
+    current_phase: null,
+    total_tasks: null,
+    completed_tasks: null,
   },
   {
     id: "7",
@@ -551,6 +871,10 @@ export const mockProjects: Project[] = [
     completed_minutes: 0,
     created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+    template_id: null,
+    current_phase: null,
+    total_tasks: null,
+    completed_tasks: null,
   },
   // Shipped
   {
@@ -572,6 +896,10 @@ export const mockProjects: Project[] = [
     completed_minutes: 180,
     created_at: new Date().toISOString(),
     updated_at: "2024-03-01",
+    template_id: null,
+    current_phase: null,
+    total_tasks: null,
+    completed_tasks: null,
   },
   {
     id: "9",
@@ -592,6 +920,10 @@ export const mockProjects: Project[] = [
     completed_minutes: 240,
     created_at: new Date().toISOString(),
     updated_at: "2024-02-20",
+    template_id: null,
+    current_phase: null,
+    total_tasks: null,
+    completed_tasks: null,
   },
   // Paused
   {
@@ -613,6 +945,10 @@ export const mockProjects: Project[] = [
     completed_minutes: 105,
     created_at: new Date().toISOString(),
     updated_at: "2024-01-15",
+    template_id: null,
+    current_phase: null,
+    total_tasks: null,
+    completed_tasks: null,
   },
 ];
 
@@ -633,6 +969,10 @@ export const mockTasks: Task[] = [
     completed_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    emoji: null,
+    zone: null,
+    phase: null,
+    is_template: false,
   },
   {
     id: "2",
@@ -650,6 +990,10 @@ export const mockTasks: Task[] = [
     completed_at: new Date().toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    emoji: null,
+    zone: null,
+    phase: null,
+    is_template: false,
   },
   {
     id: "3",
@@ -667,5 +1011,9 @@ export const mockTasks: Task[] = [
     completed_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    emoji: null,
+    zone: null,
+    phase: null,
+    is_template: false,
   },
 ];
