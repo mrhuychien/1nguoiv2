@@ -140,21 +140,32 @@ export default function ProjectDetailPage() {
     updateTaskInDb,
   } = useProjectStore();
 
-  // Get template tasks from zen-store
+  // Get zen-store data for Zen Focus projects
   const {
+    projects: zenProjects,
     getProjectTemplateTasks,
     completeTemplateTask,
     skipTemplateTask,
     startTemplateTask,
+    deleteProject: deleteZenProject,
+    addTask: addZenTask,
   } = useZenStore();
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [viewMode, setViewMode] = useState<"all" | "template" | "manual">("all");
 
-  const project = getProjectById(projectId);
+  // Try to find project in project-store first, then zen-store
+  const projectFromStore = getProjectById(projectId);
+  const zenProject = zenProjects.find((p) => p.id === projectId);
+
+  // Determine which project system we're using
+  const isZenProject = !projectFromStore && !!zenProject;
   const manualTasks = getProjectTasks(projectId);
   const templateTasks = getProjectTemplateTasks(projectId);
+
+  // Get zen project's manual tasks (stored in ZenProject.tasks)
+  const zenManualTasks = zenProject?.tasks || [];
 
   // Unified task type for display
   interface DisplayTask {
@@ -172,6 +183,7 @@ export default function ProjectDetailPage() {
 
   // Combine tasks for display
   const allTasks: DisplayTask[] = [
+    // Template tasks from zen-store
     ...templateTasks.map((t) => ({
       id: t.id,
       title: t.title,
@@ -184,6 +196,7 @@ export default function ProjectDetailPage() {
       phase: t.phase,
       isTemplate: true,
     })),
+    // Manual tasks from project-store (for regular projects)
     ...manualTasks.map((t) => ({
       id: t.id,
       title: t.title,
@@ -194,6 +207,19 @@ export default function ProjectDetailPage() {
       timeSpentMinutes: undefined,
       zone: undefined,
       phase: undefined,
+      isTemplate: false,
+    })),
+    // Manual tasks from zen-store (for zen projects)
+    ...zenManualTasks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      completed: t.status === "completed",
+      status: t.status,
+      emoji: t.emoji,
+      estimatedMinutes: t.estimatedMinutes,
+      timeSpentMinutes: t.actualMinutes,
+      zone: t.zone,
+      phase: t.phase,
       isTemplate: false,
     })),
   ];
@@ -216,8 +242,8 @@ export default function ProjectDetailPage() {
     );
   }
 
-  // Project not found
-  if (!project) {
+  // Project not found in either store
+  if (!projectFromStore && !zenProject) {
     return (
       <div className="p-6">
         <div className="text-center py-12">
@@ -238,6 +264,32 @@ export default function ProjectDetailPage() {
     );
   }
 
+  // For Zen projects, create a compatible project object
+  const project = projectFromStore || (zenProject ? {
+    id: zenProject.id,
+    title: zenProject.name,
+    description: "",
+    lifecycle: "building" as const,
+    status: "active" as const,
+    health: "on-track" as const,
+    progress: zenProject.totalMinutes > 0
+      ? Math.round((zenProject.completedMinutes / zenProject.totalMinutes) * 100)
+      : 0,
+    deadline: null,
+    current_task: null,
+    last_task: null,
+    created_at: zenProject.createdAt.toString(),
+    updated_at: zenProject.updatedAt.toString(),
+    user_id: userId || "",
+    color: zenProject.color,
+    icon: zenProject.icon,
+    templateId: zenProject.templateId,
+  } : null);
+
+  if (!project) {
+    return null;
+  }
+
   const config = lifecycleConfig[project.lifecycle];
   const Icon = config.icon;
   const health = healthConfig[project.health];
@@ -246,6 +298,10 @@ export default function ProjectDetailPage() {
   const totalTaskCount = allTasks.length;
 
   const handleMoveToNextStage = async () => {
+    if (isZenProject) {
+      // Zen projects don't have lifecycle stages yet
+      return;
+    }
     if (config.next) {
       await updateProjectInDb(project.id, {
         lifecycle: config.next,
@@ -262,6 +318,7 @@ export default function ProjectDetailPage() {
   };
 
   const handlePauseProject = async () => {
+    if (isZenProject) return;
     await updateProjectInDb(project.id, {
       lifecycle: "paused",
       status: "archived",
@@ -270,23 +327,32 @@ export default function ProjectDetailPage() {
 
   const handleDeleteProject = async () => {
     if (confirm("Bạn có chắc muốn xóa dự án này?")) {
-      await deleteProjectFromDb(project.id);
-      router.push("/projects");
+      if (isZenProject) {
+        deleteZenProject(project.id);
+      } else {
+        await deleteProjectFromDb(project.id);
+      }
+      router.push(isZenProject ? "/zen" : "/projects");
     }
   };
 
   const handleAddTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTaskTitle.trim() || !userId) return;
+    if (!newTaskTitle.trim()) return;
 
     setIsAddingTask(true);
-    await createTask({
-      user_id: userId,
-      project_id: project.id,
-      title: newTaskTitle.trim(),
-      completed: false,
-      is_daily_focus: false,
-    });
+    if (isZenProject) {
+      // Add task to zen-store
+      addZenTask(project.id, newTaskTitle.trim(), 25); // Default 25 minutes
+    } else if (userId) {
+      await createTask({
+        user_id: userId,
+        project_id: project.id,
+        title: newTaskTitle.trim(),
+        completed: false,
+        is_daily_focus: false,
+      });
+    }
     setNewTaskTitle("");
     setIsAddingTask(false);
   };
