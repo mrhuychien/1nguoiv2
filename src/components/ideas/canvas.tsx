@@ -295,6 +295,31 @@ export function Canvas() {
             }
           }
         }
+      })
+      .on("dblclick", (event, d) => {
+        event.stopPropagation();
+
+        // In edit mode, double-click to edit node title inline
+        if (editMode && d.x !== undefined && d.y !== undefined) {
+          const currentTransform = d3.zoomTransform(svg.node()!);
+          const screenX = d.x * currentTransform.k + currentTransform.x;
+          const screenY = d.y * currentTransform.k + currentTransform.y;
+
+          // Get current title from store
+          const nodeData = storeNodes.find((n) => n.id === d.id);
+          const currentTitle = nodeData?.title || d.title;
+
+          setEditingNodeId(d.id);
+          setEditingNodeTitle(currentTitle);
+          setEditingNodePosition({ x: screenX, y: screenY });
+
+          setTimeout(() => {
+            if (inlineInputRef.current) {
+              inlineInputRef.current.focus();
+              inlineInputRef.current.select();
+            }
+          }, 50);
+        }
       });
 
     // Highlight selected node and search results
@@ -1023,7 +1048,7 @@ export function Canvas() {
       {/* Instructions */}
       <div className="absolute bottom-4 right-4 px-3 py-1.5 bg-black/60 backdrop-blur-sm rounded text-[10px] text-gray-600">
         {editMode
-          ? "Drag: di chuyển · Click: chọn · →: kết nối · +: thêm nối"
+          ? "Drag: di chuyển · Click: chọn · Double-click: sửa tiêu đề · →: kết nối · +: thêm nối"
           : "Drag: di chuyển · Scroll: zoom · Double-click: thêm · Shift+Click: kết nối · Space: reheat"
         }
       </div>
