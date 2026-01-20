@@ -38,6 +38,9 @@ interface IdeaActions {
   fetchGraphs: (userId: string) => Promise<void>;
   fetchNodesAndLinks: (graphId: string) => Promise<void>;
   createGraph: (userId: string, title: string) => Promise<Graph | null>;
+  updateGraph: (id: string, updates: Partial<Graph>) => Promise<void>;
+  deleteGraph: (id: string) => Promise<void>;
+  selectGraph: (graphId: string) => Promise<void>;
   getOrCreateDefaultGraph: (userId: string) => Promise<Graph | null>;
 
   // Node database operations
@@ -205,19 +208,90 @@ export const useIdeaStore = create<IdeaStore>((set, get) => ({
     }
   },
 
+  updateGraph: async (id: string, updates: Partial<Graph>) => {
+    // Optimistic update
+    set((state) => ({
+      graphs: state.graphs.map((g) =>
+        g.id === id ? { ...g, ...updates, updated_at: new Date().toISOString() } : g
+      ),
+    }));
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { error } = await supabaseAny
+        .from("graphs")
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("[Ideas] Error updating graph:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  deleteGraph: async (id: string) => {
+    const { graphs, graphId } = get();
+
+    // Don't delete if it's the only graph
+    if (graphs.length <= 1) {
+      set({ error: "Không thể xóa graph duy nhất" });
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+
+      // Delete all links in this graph first
+      await supabaseAny.from("links").delete().eq("graph_id", id);
+
+      // Delete all nodes in this graph
+      await supabaseAny.from("nodes").delete().eq("graph_id", id);
+
+      // Delete the graph
+      const { error } = await supabaseAny.from("graphs").delete().eq("id", id);
+
+      if (error) throw error;
+
+      // Update local state
+      const remainingGraphs = graphs.filter((g) => g.id !== id);
+      set({ graphs: remainingGraphs });
+
+      // If we deleted the current graph, switch to another one
+      if (graphId === id && remainingGraphs.length > 0) {
+        await get().selectGraph(remainingGraphs[0].id);
+      }
+    } catch (error) {
+      console.error("[Ideas] Error deleting graph:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  selectGraph: async (graphId: string) => {
+    set({ isLoading: true, selectedNodeId: null });
+    try {
+      await get().fetchNodesAndLinks(graphId);
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
   getOrCreateDefaultGraph: async (userId: string) => {
     try {
       const supabase = createClient();
 
-      // Try to find existing graph
+      // Fetch all user graphs
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const supabaseAny = supabase as any;
       const { data: existingGraphs, error: fetchError } = await supabaseAny
         .from("graphs")
         .select("*")
         .eq("user_id", userId)
-        .order("created_at", { ascending: true })
-        .limit(1);
+        .order("created_at", { ascending: true });
 
       if (fetchError) throw fetchError;
 

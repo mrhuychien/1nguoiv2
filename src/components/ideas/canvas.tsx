@@ -5,6 +5,7 @@ import * as d3 from "d3";
 import { Search, X, Loader2 } from "lucide-react";
 import { useIdeaStore } from "@/store/idea-store";
 import { useIdeaData } from "@/hooks/use-idea-data";
+import { GraphSelector } from "./graph-selector";
 
 interface D3Node extends d3.SimulationNodeDatum {
   id: string;
@@ -404,8 +405,12 @@ export function Canvas() {
     <div ref={containerRef} className="w-full h-full relative bg-[#0a0a0f]">
       <svg ref={svgRef} className="w-full h-full" />
 
-      {/* Search Bar */}
+      {/* Graph Selector and Search Bar */}
       <div className="absolute top-4 left-4 flex items-center gap-2">
+        {/* Graph Selector */}
+        {userId && <GraphSelector userId={userId} />}
+
+        {/* Search */}
         {isSearchOpen ? (
           <div className="flex items-center gap-2 bg-black/70 backdrop-blur-sm border border-white/20 rounded-lg px-3 py-2">
             <Search className="h-4 w-4 text-gray-400" />
