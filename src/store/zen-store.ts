@@ -17,6 +17,7 @@ import {
   ProjectTask,
   TemplateId,
   TaskStatus,
+  WorkLogEntry,
 } from "@/types/zen";
 import { generateId } from "@/lib/utils";
 import {
@@ -35,6 +36,9 @@ interface ZenStoreState {
 
   // Template Tasks (separate from project tasks)
   templateTasks: ProjectTask[];
+
+  // Garden Tasks - only task IDs that have been dropped into the garden
+  gardenTaskIds: string[];
 
   // Current Timer Task
   currentTimerTaskId: string | null;
@@ -57,6 +61,9 @@ interface ZenStoreState {
 
   // Sessions history
   sessions: ZenSession[];
+
+  // Work log - daily work history
+  workLog: WorkLogEntry[];
 
   // Stats
   stats: ZenStats;
@@ -131,6 +138,17 @@ interface ZenStoreActions {
   clearTimerTask: () => void;
   getCurrentTimerTask: () => { id: string; title: string; emoji?: string } | null;
 
+  // Garden Task actions
+  addToGarden: (taskId: string) => void;
+  removeFromGarden: (taskId: string) => void;
+  clearGarden: () => void;
+
+  // Work Log actions
+  addWorkLogEntry: (entry: Omit<WorkLogEntry, "id" | "date" | "timestamp">) => void;
+  getTodayWorkLog: () => WorkLogEntry[];
+  getWorkLogByDate: (date: string) => WorkLogEntry[];
+  clearWorkLog: () => void;
+
   // UI actions
   setShowSessionComplete: (show: boolean) => void;
   setShowTaskCompleteDialog: (show: boolean) => void;
@@ -155,6 +173,8 @@ const initialState: ZenStoreState = {
 
   templateTasks: [],
 
+  gardenTaskIds: [],
+
   currentTimerTaskId: null,
   currentTimerTaskType: null,
 
@@ -170,6 +190,8 @@ const initialState: ZenStoreState = {
 
   scheduleBlocks: DEFAULT_SCHEDULE_BLOCKS,
   sessions: [],
+
+  workLog: [],
 
   stats: {
     todayMinutes: 0,
@@ -634,6 +656,53 @@ export const useZenStore = create<ZenStore>()(
         return null;
       },
 
+      // Garden Task actions
+      addToGarden: (taskId) => {
+        set((state) => ({
+          gardenTaskIds: state.gardenTaskIds.includes(taskId)
+            ? state.gardenTaskIds
+            : [...state.gardenTaskIds, taskId],
+        }));
+      },
+
+      removeFromGarden: (taskId) => {
+        set((state) => ({
+          gardenTaskIds: state.gardenTaskIds.filter((id) => id !== taskId),
+        }));
+      },
+
+      clearGarden: () => {
+        set({ gardenTaskIds: [] });
+      },
+
+      // Work Log actions
+      addWorkLogEntry: (entry) => {
+        const now = new Date();
+        const date = now.toISOString().split("T")[0]; // YYYY-MM-DD
+        const newEntry: WorkLogEntry = {
+          ...entry,
+          id: generateId(),
+          date,
+          timestamp: now.toISOString(),
+        };
+        set((state) => ({
+          workLog: [newEntry, ...state.workLog],
+        }));
+      },
+
+      getTodayWorkLog: () => {
+        const today = new Date().toISOString().split("T")[0];
+        return get().workLog.filter((entry) => entry.date === today);
+      },
+
+      getWorkLogByDate: (date) => {
+        return get().workLog.filter((entry) => entry.date === date);
+      },
+
+      clearWorkLog: () => {
+        set({ workLog: [] });
+      },
+
       // UI actions
       setShowSessionComplete: (show) => set({ showSessionComplete: show }),
       setShowTaskCompleteDialog: (show) => set({ showTaskCompleteDialog: show }),
@@ -699,6 +768,8 @@ export const useZenStore = create<ZenStore>()(
         bellEnabled: state.bellEnabled,
         sessionsCompleted: state.sessionsCompleted,
         templateTasks: state.templateTasks,
+        gardenTaskIds: state.gardenTaskIds,
+        workLog: state.workLog,
       }),
     }
   )

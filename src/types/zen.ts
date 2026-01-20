@@ -96,6 +96,22 @@ export interface ZenSession {
   notes?: string;
 }
 
+// Work log entry for tracking daily work history
+export interface WorkLogEntry {
+  id: string;
+  date: string; // YYYY-MM-DD format
+  timestamp: string; // ISO timestamp
+  taskId: string;
+  taskTitle: string;
+  taskEmoji?: string;
+  projectId?: string;
+  projectName?: string;
+  projectColor?: string;
+  durationMinutes: number;
+  status: "completed" | "in_progress" | "paused";
+  zone?: DeepWorkZone;
+}
+
 export interface ZenScheduleBlock {
   id: string;
   zone: DeepWorkZone;

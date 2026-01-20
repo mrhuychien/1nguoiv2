@@ -11,3 +11,4 @@ export { TemplateSelector } from "./template-selector";
 export { TemplatePreview } from "./template-preview";
 export { TaskList } from "./task-list";
 export { ProjectTasksPanel } from "./project-tasks-panel";
+export { WorkLogPanel } from "./work-log-panel";

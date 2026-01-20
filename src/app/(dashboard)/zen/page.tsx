@@ -14,6 +14,7 @@ import {
   NewProjectModal,
   SessionCompleteOverlay,
   DeepWorkOverlay,
+  WorkLogPanel,
 } from "@/components/zen";
 import { useZenStore, getCurrentZone } from "@/store/zen-store";
 import { useProjectStore } from "@/store/project-store";
@@ -34,6 +35,7 @@ export default function ZenPage() {
     startTemplateTask: startTemplateTaskInDb,
     addTemplateTaskTime: addTemplateTaskTimeInDb,
     updateTaskInDb,
+    getTemplateTasks,
   } = useProjectStore();
 
   // Keep UI and timer state in zen-store
@@ -49,6 +51,8 @@ export default function ZenPage() {
     setTimerTask,
     clearTimerTask,
     timerTargetMinutes,
+    currentZone,
+    addWorkLogEntry,
   } = useZenStore();
 
   const isInitialized = projectsInitialized || zenInitialized;
@@ -117,9 +121,29 @@ export default function ZenPage() {
     }
   };
 
+  // Log work entry helper
+  const logWorkEntry = (status: "completed" | "in_progress" | "paused") => {
+    if (!currentTask) return;
+
+    addWorkLogEntry({
+      taskId: currentTask.id,
+      taskTitle: currentTask.title,
+      taskEmoji: currentTask.emoji,
+      projectId: activeProject?.id,
+      projectName: activeProject?.title,
+      projectColor: activeProject?.color || undefined,
+      durationMinutes: timerTargetMinutes,
+      status,
+      zone: currentZone || undefined,
+    });
+  };
+
   // Handle task completion
   const handleCompleteTask = () => {
     if (!currentTimerTaskId || !currentTimerTaskType) return;
+
+    // Log work entry
+    logWorkEntry("completed");
 
     if (currentTimerTaskType === "template") {
       completeTemplateTaskInDb(currentTimerTaskId);
@@ -138,8 +162,62 @@ export default function ZenPage() {
 
   // Handle continue working
   const handleContinueTask = () => {
+    // Log work entry as in_progress
+    logWorkEntry("in_progress");
+
     setShowTaskCompleteDialog(false);
     // Timer will be reset, user can start another session
+  };
+
+  // Get next task after current one (for template tasks)
+  const getNextTask = () => {
+    if (!currentTimerTaskId || currentTimerTaskType !== "template" || !activeProjectId) return null;
+
+    const templateTasks = getTemplateTasks(activeProjectId);
+    const currentIndex = templateTasks.findIndex(t => t.id === currentTimerTaskId);
+
+    // Find next pending task
+    for (let i = currentIndex + 1; i < templateTasks.length; i++) {
+      if (templateTasks[i].status === "pending") {
+        return {
+          id: templateTasks[i].id,
+          title: templateTasks[i].title,
+          emoji: templateTasks[i].emoji || undefined,
+        };
+      }
+    }
+    return null;
+  };
+
+  const nextTask = getNextTask();
+
+  // Handle next phase - complete current task and move to next
+  const handleNextPhase = () => {
+    if (!currentTimerTaskId || !currentTimerTaskType) return;
+
+    // Log work entry
+    logWorkEntry("completed");
+
+    // Complete current task
+    if (currentTimerTaskType === "template") {
+      completeTemplateTaskInDb(currentTimerTaskId);
+    } else {
+      updateTaskInDb(currentTimerTaskId, {
+        status: "completed",
+        completed: true,
+        completed_at: new Date().toISOString(),
+      });
+    }
+
+    // Start next task if available
+    if (nextTask) {
+      setTimerTask(nextTask.id, "template");
+      startTemplateTaskInDb(nextTask.id);
+    } else {
+      clearTimerTask();
+    }
+
+    setShowTaskCompleteDialog(false);
   };
 
   // Clear current task
@@ -278,6 +356,11 @@ export default function ZenPage() {
                 <section className="p-6 rounded-2xl bg-gray-900/50 border border-gray-800">
                   <GardenSection />
                 </section>
+
+                {/* Work Log Section */}
+                <section className="p-6 rounded-2xl bg-gray-900/50 border border-gray-800">
+                  <WorkLogPanel />
+                </section>
               </div>
 
               {/* Right sidebar - Schedule and Stats */}
@@ -335,8 +418,11 @@ export default function ZenPage() {
       {showTaskCompleteDialog && currentTask && (
         <TaskCompleteDialog
           task={currentTask}
+          nextTask={nextTask}
+          timeSpent={timerTargetMinutes}
           onComplete={handleCompleteTask}
           onContinue={handleContinueTask}
+          onNextPhase={handleNextPhase}
         />
       )}
 
@@ -412,11 +498,14 @@ function KeyboardShortcuts() {
 // Task Complete Dialog
 interface TaskCompleteDialogProps {
   task: { id: string; title: string; emoji?: string };
+  nextTask: { id: string; title: string; emoji?: string } | null;
+  timeSpent: number;
   onComplete: () => void;
   onContinue: () => void;
+  onNextPhase: () => void;
 }
 
-function TaskCompleteDialog({ task, onComplete, onContinue }: TaskCompleteDialogProps) {
+function TaskCompleteDialog({ task, nextTask, timeSpent, onComplete, onContinue, onNextPhase }: TaskCompleteDialogProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
       {/* Backdrop */}
@@ -437,32 +526,61 @@ function TaskCompleteDialog({ task, onComplete, onContinue }: TaskCompleteDialog
         </h2>
 
         {/* Current task */}
-        <div className="flex items-center justify-center gap-2 mb-6">
+        <div className="flex items-center justify-center gap-2 mb-2">
           {task.emoji && <span className="text-lg">{task.emoji}</span>}
           <span className="text-gray-300 text-center">{task.title}</span>
         </div>
 
+        {/* Time spent */}
+        <p className="text-center text-cyan-400 text-sm mb-4">
+          +{timeSpent} phút
+        </p>
+
         {/* Question */}
-        <p className="text-center text-gray-400 mb-6">
+        <p className="text-center text-gray-400 mb-4">
           Bạn đã hoàn thành task này chưa?
         </p>
 
+        {/* Next task preview */}
+        {nextTask && (
+          <div className="p-3 rounded-lg bg-gray-800/50 border border-gray-700 mb-4">
+            <p className="text-xs text-gray-500 mb-1">Task tiếp theo:</p>
+            <div className="flex items-center gap-2">
+              {nextTask.emoji && <span className="text-sm">{nextTask.emoji}</span>}
+              <span className="text-sm text-gray-300">{nextTask.title}</span>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
-        <div className="flex gap-3">
-          <button
-            onClick={onContinue}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Làm tiếp
-          </button>
-          <button
-            onClick={onComplete}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium hover:from-green-400 hover:to-emerald-400 transition-colors"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            Hoàn thành
-          </button>
+        <div className="flex flex-col gap-2">
+          {/* Primary actions */}
+          <div className="flex gap-2">
+            <button
+              onClick={onContinue}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gray-800 text-gray-300 hover:bg-gray-700 border border-gray-700 transition-colors text-sm"
+            >
+              <RotateCcw className="w-4 h-4" />
+              Làm tiếp
+            </button>
+            <button
+              onClick={onComplete}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-medium hover:from-green-400 hover:to-emerald-400 transition-colors text-sm"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              Done
+            </button>
+          </div>
+
+          {/* Next phase button - only show if there's a next task */}
+          {nextTask && (
+            <button
+              onClick={onNextPhase}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-500 text-white font-medium hover:from-cyan-400 hover:to-purple-400 transition-colors text-sm"
+            >
+              Done & Tiếp tục Phase mới →
+            </button>
+          )}
         </div>
       </div>
     </div>
