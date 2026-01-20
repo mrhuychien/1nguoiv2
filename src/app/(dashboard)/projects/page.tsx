@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/project-store";
 import { useProjectData } from "@/hooks/use-project-data";
 import { ProjectModal } from "@/components/projects/project-modal";
+import { NewProjectModal } from "@/components/zen/project-sidebar";
 import { Project } from "@/types/database.types";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
@@ -485,64 +486,29 @@ function PausedCard({
 }
 
 export default function ProjectsPage() {
-  const { projects, isLoading, userId } = useProjectData();
-  const { createProject, createProjectWithTemplate, updateProjectInDb, deleteProjectFromDb } = useProjectStore();
+  const { projects, isLoading } = useProjectData();
+  const { updateProjectInDb, deleteProjectFromDb } = useProjectStore();
   const [filter, setFilter] = useState<LifecycleFilter>("all");
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [modalMode, setModalMode] = useState<"create" | "edit">("create");
 
   // Handlers
   const handleCreateProject = () => {
-    setEditingProject(null);
-    setModalMode("create");
-    setIsModalOpen(true);
+    setIsNewProjectModalOpen(true);
   };
 
   const handleEditProject = (project: Project) => {
     setEditingProject(project);
-    setModalMode("edit");
-    setIsModalOpen(true);
+    setIsEditModalOpen(true);
   };
 
-  const handleSaveProject = async (data: Partial<Project> & { templateId?: string }): Promise<boolean> => {
-    if (!userId) return false;
+  const handleSaveProject = async (data: Partial<Project>): Promise<boolean> => {
+    if (!editingProject) return false;
 
     try {
-      if (modalMode === "create") {
-        // Check if template is selected (not blank)
-        if (data.templateId && data.templateId !== "blank") {
-          // Use createProjectWithTemplate for template projects
-          const result = await createProjectWithTemplate(
-            userId,
-            data.title || "Untitled",
-            "#00d4ff", // Default color
-            "rocket", // Default icon
-            data.templateId as import("@/types/zen").TemplateId
-          );
-          return result !== null;
-        } else {
-          // Create blank project
-          const result = await createProject({
-            user_id: userId,
-            title: data.title || "Untitled",
-            description: data.description || null,
-            status: data.status || "active",
-            lifecycle: data.lifecycle || "idea",
-            health: "on-track",
-            is_focus: false,
-            progress: data.progress || 0,
-            deadline: data.deadline || null,
-            last_task: null,
-            current_task: data.current_task || null,
-          });
-          return result !== null;
-        }
-      } else if (editingProject) {
-        await updateProjectInDb(editingProject.id, data);
-        return true;
-      }
-      return false;
+      await updateProjectInDb(editingProject.id, data);
+      return true;
     } catch (error) {
       console.error("Error saving project:", error);
       return false;
@@ -774,13 +740,19 @@ export default function ProjectsPage() {
           </div>
         )}
 
-        {/* Project Modal */}
+        {/* New Project Modal (unified) */}
+        <NewProjectModal
+          isOpen={isNewProjectModalOpen}
+          onClose={() => setIsNewProjectModalOpen(false)}
+        />
+
+        {/* Edit Project Modal */}
         <ProjectModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
           onSave={handleSaveProject}
           project={editingProject}
-          mode={modalMode}
+          mode="edit"
         />
       </div>
   );

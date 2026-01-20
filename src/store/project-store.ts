@@ -28,7 +28,12 @@ interface ProjectActions {
     name: string,
     color: string,
     icon: string,
-    templateId: TemplateId
+    templateId: TemplateId,
+    options?: {
+      description?: string | null;
+      lifecycle?: string;
+      deadline?: string | null;
+    }
   ) => Promise<Project | null>;
   updateProjectInDb: (id: string, updates: Partial<Project>) => Promise<void>;
   deleteProjectFromDb: (id: string) => Promise<void>;
@@ -185,7 +190,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     }
   },
 
-  createProjectWithTemplate: async (userId, name, color, icon, templateId) => {
+  createProjectWithTemplate: async (userId, name, color, icon, templateId, options = {}) => {
     set({ isLoading: true, error: null });
     try {
       const template = getTemplateById(templateId);
@@ -203,6 +208,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         .insert({
           user_id: userId,
           title: name,
+          description: options.description || null,
           color,
           icon,
           template_id: templateId,
@@ -210,8 +216,13 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           total_tasks: template?.tasks.length || 0,
           completed_tasks: 0,
           current_phase: 1,
-          lifecycle: "building",
+          lifecycle: options.lifecycle || "building",
+          deadline: options.deadline || null,
           status: "active",
+          health: "on-track",
+          is_focus: false,
+          progress: 0,
+          completed_minutes: 0,
         })
         .select()
         .single();

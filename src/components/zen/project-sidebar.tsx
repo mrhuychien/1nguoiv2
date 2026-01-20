@@ -320,25 +320,44 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
   );
 }
 
+// Lifecycle options for project
+const LIFECYCLE_OPTIONS = [
+  { value: "idea", label: "Idea", emoji: "💡", color: "border-yellow-500 bg-yellow-500/10 text-yellow-400" },
+  { value: "designing", label: "Design", emoji: "📐", color: "border-blue-500 bg-blue-500/10 text-blue-400" },
+  { value: "building", label: "Build", emoji: "🏗️", color: "border-orange-500 bg-orange-500/10 text-orange-400" },
+];
+
+// Props for external control of the modal
+interface NewProjectModalProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
 // New Project Modal with Template Support
-export function NewProjectModal() {
+export function NewProjectModal({ isOpen: externalIsOpen, onClose: externalOnClose }: NewProjectModalProps = {}) {
   const { user } = useUser();
 
   // Use unified project-store for data operations
   const { createProject, createProjectWithTemplate, isLoading, error: storeError } = useProjectStore();
 
-  // Keep UI state in zen-store
+  // Keep UI state in zen-store (fallback when not externally controlled)
   const { showNewProjectModal, setShowNewProjectModal } = useZenStore();
+
+  // Use external control if provided, otherwise use zen-store
+  const isModalOpen = externalIsOpen !== undefined ? externalIsOpen : showNewProjectModal;
+  const closeModal = externalOnClose || (() => setShowNewProjectModal(false));
 
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [color, setColor] = useState(COLORS[0]);
   const [icon, setIcon] = useState("rocket");
+  const [lifecycle, setLifecycle] = useState("building");
   const [templateId, setTemplateId] = useState<TemplateId>("web-app");
   const [showPreview, setShowPreview] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!showNewProjectModal) return null;
+  if (!isModalOpen) return null;
 
   const handleNext = () => {
     if (step === 1 && name.trim()) {
@@ -362,10 +381,11 @@ export function NewProjectModal() {
       result = await createProject({
         user_id: user.id,
         title: name.trim(),
+        description: description.trim() || null,
         color,
         icon,
         status: "active",
-        lifecycle: "idea",
+        lifecycle: lifecycle as "idea" | "designing" | "building",
         health: "on-track",
         is_focus: false,
         progress: 0,
@@ -374,7 +394,10 @@ export function NewProjectModal() {
       });
     } else {
       // Create project with template tasks
-      result = await createProjectWithTemplate(user.id, name.trim(), color, icon, templateId);
+      result = await createProjectWithTemplate(user.id, name.trim(), color, icon, templateId, {
+        description: description.trim() || null,
+        lifecycle,
+      });
     }
 
     // Check if creation was successful
@@ -386,23 +409,28 @@ export function NewProjectModal() {
 
     // Reset and close only on success
     setName("");
+    setDescription("");
     setColor(COLORS[0]);
     setIcon("rocket");
+    setLifecycle("building");
     setTemplateId("web-app");
     setStep(1);
     setShowPreview(false);
     setError(null);
-    setShowNewProjectModal(false);
+    closeModal();
   };
 
   const handleClose = () => {
     setName("");
+    setDescription("");
     setColor(COLORS[0]);
     setIcon("rocket");
+    setLifecycle("building");
     setTemplateId("web-app");
     setStep(1);
     setShowPreview(false);
-    setShowNewProjectModal(false);
+    setError(null);
+    closeModal();
   };
 
   const totalTime = getTemplateEstimatedTime(templateId);
@@ -422,8 +450,8 @@ export function NewProjectModal() {
         </h2>
 
         {step === 1 ? (
-          // STEP 1: Project Name, Color & Icon
-          <div className="space-y-5">
+          // STEP 1: Project Info
+          <div className="space-y-4">
             {/* Name input */}
             <div>
               <label className="block text-sm text-gray-400 mb-2">
@@ -439,47 +467,88 @@ export function NewProjectModal() {
               />
             </div>
 
-            {/* Color picker */}
+            {/* Description input */}
             <div>
               <label className="block text-sm text-gray-400 mb-2">
-                Màu sắc
+                Mô tả (không bắt buộc)
+              </label>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Mô tả ngắn về dự án..."
+                rows={2}
+                className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder:text-gray-500 outline-none focus:border-cyan-500 transition-colors resize-none"
+              />
+            </div>
+
+            {/* Lifecycle selector */}
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">
+                Giai đoạn
               </label>
               <div className="flex gap-2">
-                {COLORS.map((c) => (
+                {LIFECYCLE_OPTIONS.map((opt) => (
                   <button
-                    key={c}
+                    key={opt.value}
                     type="button"
-                    onClick={() => setColor(c)}
+                    onClick={() => setLifecycle(opt.value)}
                     className={cn(
-                      "w-10 h-10 rounded-lg transition-all",
-                      color === c &&
-                        "ring-2 ring-white ring-offset-2 ring-offset-gray-900"
+                      "flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all border",
+                      lifecycle === opt.value
+                        ? opt.color
+                        : "border-gray-700 bg-gray-800 text-gray-400 hover:text-white"
                     )}
-                    style={{ backgroundColor: c }}
-                  />
+                  >
+                    {opt.emoji} {opt.label}
+                  </button>
                 ))}
               </div>
             </div>
 
-            {/* Icon picker */}
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Icon</label>
-              <div className="flex gap-2">
-                {Object.entries(ICONS).map(([key, Icon]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setIcon(key)}
-                    className={cn(
-                      "w-10 h-10 rounded-lg flex items-center justify-center transition-all",
-                      icon === key
-                        ? "bg-gray-700 text-white"
-                        : "bg-gray-800 text-gray-400 hover:text-white"
-                    )}
-                  >
-                    <Icon className="w-5 h-5" />
-                  </button>
-                ))}
+            {/* Color & Icon row */}
+            <div className="grid grid-cols-2 gap-4">
+              {/* Color picker */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">
+                  Màu sắc
+                </label>
+                <div className="flex gap-1.5">
+                  {COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setColor(c)}
+                      className={cn(
+                        "w-8 h-8 rounded-lg transition-all",
+                        color === c &&
+                          "ring-2 ring-white ring-offset-2 ring-offset-gray-900"
+                      )}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* Icon picker */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Icon</label>
+                <div className="flex gap-1.5">
+                  {Object.entries(ICONS).map(([key, Icon]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setIcon(key)}
+                      className={cn(
+                        "w-8 h-8 rounded-lg flex items-center justify-center transition-all",
+                        icon === key
+                          ? "bg-gray-700 text-white"
+                          : "bg-gray-800 text-gray-400 hover:text-white"
+                      )}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
