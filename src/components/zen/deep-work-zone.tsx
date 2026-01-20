@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Target, Zap, TrendingUp, Clock, ListTodo } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
+import { useProjectStore } from "@/store/project-store";
 import { cn } from "@/lib/utils";
 import { TaskList } from "./task-list";
 import { ProjectTasksPanel } from "./project-tasks-panel";
@@ -11,24 +12,91 @@ interface DeepWorkZoneProps {
   className?: string;
 }
 
+// Helper functions to calculate real stats
+function getStartOfDay(): Date {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return now;
+}
+
+function getStartOfWeek(): Date {
+  const now = new Date();
+  const dayOfWeek = now.getDay();
+  const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Monday as start of week
+  now.setDate(now.getDate() - diff);
+  now.setHours(0, 0, 0, 0);
+  return now;
+}
+
 export function DeepWorkZone({ className }: DeepWorkZoneProps) {
   const {
-    stats,
     isDeepWorkMode,
     enterDeepWorkMode,
     timerState,
     activeProjectId,
-    projects,
-    getCurrentTemplateTask,
+    sessionsCompleted,
   } = useZenStore();
+
+  const {
+    projects,
+    tasks,
+    getCurrentTemplateTask,
+  } = useProjectStore();
+
   const [showTasksPanel, setShowTasksPanel] = useState(false);
 
-  const activeProject = projects.find((p) => p.id === activeProjectId);
+  // Get active project from project-store
+  const activeProject = projects.find((p) => p.id === activeProjectId && p.status === "active");
   const hasTemplate =
-    activeProject?.templateId && activeProject.templateId !== "blank";
+    activeProject?.template_id && activeProject.template_id !== "blank";
   const currentTask = activeProject
     ? getCurrentTemplateTask(activeProject.id)
     : null;
+
+  // Calculate real stats from task data
+  const stats = useMemo(() => {
+    const startOfDay = getStartOfDay();
+    const startOfWeek = getStartOfWeek();
+
+    // Calculate minutes from tasks with actual_minutes
+    let todayMinutes = 0;
+    let weekMinutes = 0;
+    let tasksCompletedThisWeek = 0;
+
+    tasks.forEach((task) => {
+      const actualMinutes = task.actual_minutes || 0;
+      const updatedAt = task.updated_at ? new Date(task.updated_at) : null;
+      const completedAt = task.completed_at ? new Date(task.completed_at) : null;
+
+      // For tasks with actual_minutes, check when they were last updated
+      if (actualMinutes > 0 && updatedAt) {
+        if (updatedAt >= startOfDay) {
+          todayMinutes += actualMinutes;
+        }
+        if (updatedAt >= startOfWeek) {
+          weekMinutes += actualMinutes;
+        }
+      }
+
+      // Count completed tasks this week
+      if (task.completed && completedAt && completedAt >= startOfWeek) {
+        tasksCompletedThisWeek++;
+      }
+    });
+
+    // Calculate streak based on consecutive days with work
+    // For simplicity, we'll estimate based on sessionsCompleted
+    const streak = Math.min(Math.floor(sessionsCompleted / 2), 30);
+
+    return {
+      todayMinutes,
+      weekMinutes,
+      streak,
+      flowSessions: sessionsCompleted,
+      tasksCompleted: tasksCompletedThisWeek,
+      projectsActive: projects.filter((p) => p.status === "active").length,
+    };
+  }, [tasks, projects, sessionsCompleted]);
 
   // Calculate daily goal progress (8 hours = 480 minutes)
   const dailyGoalMinutes = 480;
@@ -148,38 +216,38 @@ export function DeepWorkZone({ className }: DeepWorkZoneProps) {
             >
               <div
                 className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: activeProject.color }}
+                style={{ backgroundColor: activeProject.color || "#00d4ff" }}
               />
             </div>
             <div className="flex-1">
-              <h4 className="font-medium text-white">{activeProject.name}</h4>
+              <h4 className="font-medium text-white">{activeProject.title}</h4>
               <p className="text-xs text-gray-400">
                 {hasTemplate ? (
                   <>
-                    Phase {activeProject.currentPhase || 1} •{" "}
-                    {activeProject.completedTasks || 0}/
-                    {activeProject.totalTasks || 0} tasks
+                    Phase {activeProject.current_phase || 1} •{" "}
+                    {activeProject.completed_tasks || 0}/
+                    {activeProject.total_tasks || 0} tasks
                   </>
                 ) : (
                   <>
-                    {Math.floor(activeProject.completedMinutes / 60)}h /{" "}
-                    {Math.floor(activeProject.totalMinutes / 60)}h
+                    {Math.floor((activeProject.completed_minutes || 0) / 60)}h /{" "}
+                    {Math.floor((activeProject.total_minutes || 0) / 60)}h
                   </>
                 )}
               </p>
             </div>
             <div className="text-right flex flex-col items-end gap-1">
               <span className="text-sm font-medium text-cyan-400">
-                {hasTemplate && activeProject.totalTasks
+                {hasTemplate && activeProject.total_tasks
                   ? Math.round(
-                      ((activeProject.completedTasks || 0) /
-                        activeProject.totalTasks) *
+                      ((activeProject.completed_tasks || 0) /
+                        activeProject.total_tasks) *
                         100
                     )
-                  : activeProject.totalMinutes > 0
+                  : (activeProject.total_minutes || 0) > 0
                   ? Math.round(
-                      (activeProject.completedMinutes /
-                        activeProject.totalMinutes) *
+                      ((activeProject.completed_minutes || 0) /
+                        (activeProject.total_minutes || 1)) *
                         100
                     )
                   : 0}
@@ -201,17 +269,17 @@ export function DeepWorkZone({ className }: DeepWorkZoneProps) {
               className="h-full rounded-full transition-all duration-500"
               style={{
                 width: `${
-                  hasTemplate && activeProject.totalTasks
-                    ? ((activeProject.completedTasks || 0) /
-                        activeProject.totalTasks) *
+                  hasTemplate && activeProject.total_tasks
+                    ? ((activeProject.completed_tasks || 0) /
+                        activeProject.total_tasks) *
                       100
-                    : activeProject.totalMinutes > 0
-                    ? (activeProject.completedMinutes /
-                        activeProject.totalMinutes) *
+                    : (activeProject.total_minutes || 0) > 0
+                    ? ((activeProject.completed_minutes || 0) /
+                        (activeProject.total_minutes || 1)) *
                       100
                     : 0
                 }%`,
-                backgroundColor: activeProject.color,
+                backgroundColor: activeProject.color || "#00d4ff",
               }}
             />
           </div>
