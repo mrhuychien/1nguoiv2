@@ -208,8 +208,15 @@ export function Canvas() {
           addLink(selectedNodeId, d.id, userId);
         } else {
           selectNode(d.id);
-          // Center the clicked node on screen
+          // Stop simulation and fix node position before centering
           if (d.x !== undefined && d.y !== undefined) {
+            // Stop the simulation to prevent movement
+            simulation.stop();
+
+            // Fix the clicked node in place
+            d.fx = d.x;
+            d.fy = d.y;
+
             const nodeX = d.x;
             const nodeY = d.y;
             const currentTransform = d3.zoomTransform(svg.node()!);
@@ -217,9 +224,16 @@ export function Canvas() {
             const centerTransform = d3.zoomIdentity
               .translate(width / 2 - nodeX * scale, height / 2 - nodeY * scale)
               .scale(scale);
+
+            // Center on node with animation
             svg.transition()
-              .duration(500)
-              .call(zoom.transform, centerTransform);
+              .duration(400)
+              .call(zoom.transform, centerTransform)
+              .on("end", () => {
+                // Release the node after centering is complete
+                d.fx = null;
+                d.fy = null;
+              });
           }
         }
       });
@@ -356,6 +370,11 @@ export function Canvas() {
     if (!svgRef.current || !containerRef.current || !zoomRef.current) return;
     if (storeNodes.length === 0) return;
 
+    // Stop simulation first
+    if (simulationRef.current) {
+      simulationRef.current.stop();
+    }
+
     // Calculate connection count for each node
     const connectionCount: Record<string, number> = {};
     storeNodes.forEach((n) => (connectionCount[n.id] = 0));
@@ -378,6 +397,10 @@ export function Canvas() {
     const node = nodesDataRef.current.find((n) => n.id === largestNodeId);
     if (!node || node.x === undefined || node.y === undefined) return;
 
+    // Fix node in place
+    node.fx = node.x;
+    node.fy = node.y;
+
     const svg = d3.select(svgRef.current);
     const container = containerRef.current;
     const width = container.clientWidth;
@@ -390,8 +413,15 @@ export function Canvas() {
       .scale(scale);
 
     svg.transition()
-      .duration(500)
-      .call(zoomRef.current.transform, transform);
+      .duration(400)
+      .call(zoomRef.current.transform, transform)
+      .on("end", () => {
+        // Release the node after centering
+        if (node) {
+          node.fx = null;
+          node.fy = null;
+        }
+      });
 
     // Select the node
     selectNode(largestNodeId);
