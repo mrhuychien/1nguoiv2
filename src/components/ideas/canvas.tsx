@@ -406,6 +406,25 @@ export function Canvas() {
     function dragged(event: d3.D3DragEvent<SVGGElement, D3Node, D3Node>) {
       event.subject.fx = event.x;
       event.subject.fy = event.y;
+      // In edit mode, manually update the visual position since simulation is stopped
+      if (editMode) {
+        event.subject.x = event.x;
+        event.subject.y = event.y;
+        // Update this node's position
+        d3.select(event.sourceEvent.target.parentNode as SVGGElement)
+          .attr("transform", `translate(${event.x}, ${event.y})`);
+        // Update connected links
+        link
+          .filter((l) => {
+            const sourceId = typeof l.source === "object" ? l.source.id : l.source;
+            const targetId = typeof l.target === "object" ? l.target.id : l.target;
+            return sourceId === event.subject.id || targetId === event.subject.id;
+          })
+          .attr("x1", (l) => (l.source as D3Node).x!)
+          .attr("y1", (l) => (l.source as D3Node).y!)
+          .attr("x2", (l) => (l.target as D3Node).x!)
+          .attr("y2", (l) => (l.target as D3Node).y!);
+      }
     }
 
     function dragended(event: d3.D3DragEvent<SVGGElement, D3Node, D3Node>) {
@@ -420,11 +439,52 @@ export function Canvas() {
       saveNodePosition(event.subject.id);
     }
 
-    // Initial zoom to fit - only if no saved transform
-    if (currentTransformRef.current === d3.zoomIdentity) {
+    // Initial zoom to fit all nodes and center on largest node - only if no saved transform
+    if (currentTransformRef.current === d3.zoomIdentity && nodes.length > 0) {
+      // Find the largest node (most connections)
+      let maxConnections = -1;
+      let largestNode = nodes[0];
+      nodes.forEach((n) => {
+        const count = connectionCount[n.id] || 0;
+        if (count > maxConnections) {
+          maxConnections = count;
+          largestNode = n;
+        }
+      });
+
+      // Calculate bounds of all nodes
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      nodes.forEach((n) => {
+        if (n.x !== undefined && n.y !== undefined) {
+          minX = Math.min(minX, n.x);
+          maxX = Math.max(maxX, n.x);
+          minY = Math.min(minY, n.y);
+          maxY = Math.max(maxY, n.y);
+        }
+      });
+
+      // Add padding
+      const padding = 100;
+      minX -= padding;
+      maxX += padding;
+      minY -= padding;
+      maxY += padding;
+
+      // Calculate scale to fit all nodes
+      const graphWidth = maxX - minX;
+      const graphHeight = maxY - minY;
+      const scaleX = width / graphWidth;
+      const scaleY = height / graphHeight;
+      const scale = Math.min(scaleX, scaleY, 1.5); // Cap at 1.5x zoom
+
+      // Center on largest node
+      const centerX = largestNode.x ?? (minX + graphWidth / 2);
+      const centerY = largestNode.y ?? (minY + graphHeight / 2);
+
       const initialTransform = d3.zoomIdentity
-        .translate(width / 4, height / 4)
-        .scale(0.8);
+        .translate(width / 2 - centerX * scale, height / 2 - centerY * scale)
+        .scale(scale);
+
       svg.call(zoom.transform, initialTransform);
       currentTransformRef.current = initialTransform;
     }
