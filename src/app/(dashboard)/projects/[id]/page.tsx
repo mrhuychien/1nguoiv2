@@ -132,21 +132,26 @@ export default function ProjectDetailPage() {
   const {
     getProjectById,
     getProjectTasks,
+    getTemplateTasks: getTemplateTasksFromStore,
+    getManualTasks: getManualTasksFromStore,
     updateProjectInDb,
     deleteProjectFromDb,
     createTask,
     toggleTaskCompleteInDb,
     deleteTaskFromDb,
     updateTaskInDb,
+    completeTemplateTask: completeTemplateTaskInDb,
+    skipTemplateTask: skipTemplateTaskInDb,
+    startTemplateTask: startTemplateTaskInDb,
   } = useProjectStore();
 
-  // Get zen-store data for Zen Focus projects
+  // Get zen-store data for Zen Focus projects (legacy - will be removed)
   const {
     projects: zenProjects,
     getProjectTemplateTasks,
-    completeTemplateTask,
-    skipTemplateTask,
-    startTemplateTask,
+    completeTemplateTask: completeZenTemplateTask,
+    skipTemplateTask: skipZenTemplateTask,
+    startTemplateTask: startZenTemplateTask,
     deleteProject: deleteZenProject,
     addTask: addZenTask,
   } = useZenStore();
@@ -161,8 +166,17 @@ export default function ProjectDetailPage() {
 
   // Determine which project system we're using
   const isZenProject = !projectFromStore && !!zenProject;
-  const manualTasks = getProjectTasks(projectId);
-  const templateTasks = getProjectTemplateTasks(projectId);
+
+  // Get tasks from project-store (unified Supabase store)
+  const templateTasksFromDb = getTemplateTasksFromStore(projectId);
+  const manualTasksFromDb = getManualTasksFromStore(projectId);
+
+  // Legacy: Get tasks from zen-store (for old zen projects)
+  const templateTasksFromZen = getProjectTemplateTasks(projectId);
+  const manualTasks = manualTasksFromDb.length > 0 ? manualTasksFromDb : getProjectTasks(projectId);
+
+  // Use template tasks from project-store first, fallback to zen-store
+  const templateTasks = templateTasksFromDb.length > 0 ? templateTasksFromDb : templateTasksFromZen;
 
   // Get zen project's manual tasks (stored in ZenProject.tasks)
   const zenManualTasks = zenProject?.tasks || [];
@@ -181,19 +195,27 @@ export default function ProjectDetailPage() {
     isTemplate: boolean;
   }
 
+  // Check if template tasks are from database (has estimated_minutes) or zen-store (has estimatedMinutes)
+  const isDbTemplateTasks = templateTasksFromDb.length > 0;
+
   // Combine tasks for display
   const allTasks: DisplayTask[] = [
-    // Template tasks from zen-store
+    // Template tasks (from project-store or zen-store)
     ...templateTasks.map((t) => ({
       id: t.id,
       title: t.title,
       completed: t.status === "completed",
-      status: t.status,
-      emoji: t.emoji,
-      estimatedMinutes: t.estimatedMinutes,
-      timeSpentMinutes: t.timeSpentMinutes,
-      zone: t.zone,
-      phase: t.phase,
+      status: t.status as TaskStatus,
+      emoji: t.emoji || undefined,
+      // Handle both database format (estimated_minutes) and zen-store format (estimatedMinutes)
+      estimatedMinutes: isDbTemplateTasks
+        ? (t as unknown as { estimated_minutes?: number }).estimated_minutes
+        : (t as unknown as { estimatedMinutes?: number }).estimatedMinutes,
+      timeSpentMinutes: isDbTemplateTasks
+        ? (t as unknown as { actual_minutes?: number }).actual_minutes
+        : (t as unknown as { timeSpentMinutes?: number }).timeSpentMinutes,
+      zone: t.zone || undefined,
+      phase: t.phase || undefined,
       isTemplate: true,
     })),
     // Manual tasks from project-store (for regular projects)
@@ -688,7 +710,13 @@ export default function ProjectDetailPage() {
                               variant="ghost"
                               size="sm"
                               className="h-7 px-2 text-xs text-cyan hover:bg-cyan/10"
-                              onClick={() => startTemplateTask(task.id)}
+                              onClick={() => {
+                                if (isDbTemplateTasks) {
+                                  startTemplateTaskInDb(task.id);
+                                } else {
+                                  startZenTemplateTask(task.id);
+                                }
+                              }}
                             >
                               <Play className="h-3 w-3 mr-1" />
                               Bắt đầu
@@ -700,7 +728,13 @@ export default function ProjectDetailPage() {
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 px-2 text-xs text-success hover:bg-success/10"
-                                onClick={() => completeTemplateTask(task.id)}
+                                onClick={() => {
+                                  if (isDbTemplateTasks) {
+                                    completeTemplateTaskInDb(task.id);
+                                  } else {
+                                    completeZenTemplateTask(task.id);
+                                  }
+                                }}
                               >
                                 <CheckCircle2 className="h-3 w-3 mr-1" />
                                 Xong
@@ -709,7 +743,13 @@ export default function ProjectDetailPage() {
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 px-2 text-xs text-text-muted hover:bg-slate-500/10"
-                                onClick={() => skipTemplateTask(task.id)}
+                                onClick={() => {
+                                  if (isDbTemplateTasks) {
+                                    skipTemplateTaskInDb(task.id);
+                                  } else {
+                                    skipZenTemplateTask(task.id);
+                                  }
+                                }}
                               >
                                 Bỏ qua
                               </Button>
