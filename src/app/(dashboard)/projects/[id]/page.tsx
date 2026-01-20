@@ -131,7 +131,6 @@ export default function ProjectDetailPage() {
   const { isLoading, userId } = useProjectData();
   const {
     getProjectById,
-    getProjectTasks,
     getTemplateTasks: getTemplateTasksFromStore,
     getManualTasks: getManualTasksFromStore,
     updateProjectInDb,
@@ -173,10 +172,12 @@ export default function ProjectDetailPage() {
 
   // Legacy: Get tasks from zen-store (for old zen projects)
   const templateTasksFromZen = getProjectTemplateTasks(projectId);
-  const manualTasks = manualTasksFromDb.length > 0 ? manualTasksFromDb : getProjectTasks(projectId);
 
   // Use template tasks from project-store first, fallback to zen-store
   const templateTasks = templateTasksFromDb.length > 0 ? templateTasksFromDb : templateTasksFromZen;
+
+  // Manual tasks - only use non-template tasks
+  const manualTasks = manualTasksFromDb;
 
   // Get zen project's manual tasks (stored in ZenProject.tasks)
   const zenManualTasks = zenProject?.tasks || [];
