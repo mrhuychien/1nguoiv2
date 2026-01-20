@@ -486,7 +486,7 @@ function PausedCard({
 
 export default function ProjectsPage() {
   const { projects, isLoading, userId } = useProjectData();
-  const { createProject, updateProjectInDb, deleteProjectFromDb } = useProjectStore();
+  const { createProject, createProjectWithTemplate, updateProjectInDb, deleteProjectFromDb } = useProjectStore();
   const [filter, setFilter] = useState<LifecycleFilter>("all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -505,25 +505,39 @@ export default function ProjectsPage() {
     setIsModalOpen(true);
   };
 
-  const handleSaveProject = async (data: Partial<Project>): Promise<boolean> => {
+  const handleSaveProject = async (data: Partial<Project> & { templateId?: string }): Promise<boolean> => {
     if (!userId) return false;
 
     try {
       if (modalMode === "create") {
-        const result = await createProject({
-          user_id: userId,
-          title: data.title || "Untitled",
-          description: data.description || null,
-          status: data.status || "active",
-          lifecycle: data.lifecycle || "idea",
-          health: "on-track",
-          is_focus: false,
-          progress: data.progress || 0,
-          deadline: data.deadline || null,
-          last_task: null,
-          current_task: data.current_task || null,
-        });
-        return result !== null;
+        // Check if template is selected (not blank)
+        if (data.templateId && data.templateId !== "blank") {
+          // Use createProjectWithTemplate for template projects
+          const result = await createProjectWithTemplate(
+            userId,
+            data.title || "Untitled",
+            "#00d4ff", // Default color
+            "rocket", // Default icon
+            data.templateId as import("@/types/zen").TemplateId
+          );
+          return result !== null;
+        } else {
+          // Create blank project
+          const result = await createProject({
+            user_id: userId,
+            title: data.title || "Untitled",
+            description: data.description || null,
+            status: data.status || "active",
+            lifecycle: data.lifecycle || "idea",
+            health: "on-track",
+            is_focus: false,
+            progress: data.progress || 0,
+            deadline: data.deadline || null,
+            last_task: null,
+            current_task: data.current_task || null,
+          });
+          return result !== null;
+        }
       } else if (editingProject) {
         await updateProjectInDb(editingProject.id, data);
         return true;

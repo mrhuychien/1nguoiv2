@@ -325,7 +325,7 @@ export function NewProjectModal() {
   const { user } = useUser();
 
   // Use unified project-store for data operations
-  const { createProject, createProjectWithTemplate, isLoading } = useProjectStore();
+  const { createProject, createProjectWithTemplate, isLoading, error: storeError } = useProjectStore();
 
   // Keep UI state in zen-store
   const { showNewProjectModal, setShowNewProjectModal } = useZenStore();
@@ -336,6 +336,7 @@ export function NewProjectModal() {
   const [icon, setIcon] = useState("rocket");
   const [templateId, setTemplateId] = useState<TemplateId>("web-app");
   const [showPreview, setShowPreview] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!showNewProjectModal) return null;
 
@@ -347,14 +348,18 @@ export function NewProjectModal() {
 
   const handleBack = () => {
     setStep(1);
+    setError(null);
   };
 
   const handleSubmit = async () => {
     if (!name.trim() || !user?.id) return;
+    setError(null);
+
+    let result = null;
 
     if (templateId === "blank") {
       // Create blank project
-      await createProject({
+      result = await createProject({
         user_id: user.id,
         title: name.trim(),
         color,
@@ -369,16 +374,24 @@ export function NewProjectModal() {
       });
     } else {
       // Create project with template tasks
-      await createProjectWithTemplate(user.id, name.trim(), color, icon, templateId);
+      result = await createProjectWithTemplate(user.id, name.trim(), color, icon, templateId);
     }
 
-    // Reset
+    // Check if creation was successful
+    if (!result) {
+      setError(storeError || "Không thể tạo project. Vui lòng thử lại.");
+      console.error("Project creation failed:", storeError);
+      return;
+    }
+
+    // Reset and close only on success
     setName("");
     setColor(COLORS[0]);
     setIcon("rocket");
     setTemplateId("web-app");
     setStep(1);
     setShowPreview(false);
+    setError(null);
     setShowNewProjectModal(false);
   };
 
@@ -515,6 +528,13 @@ export function NewProjectModal() {
             {showPreview && (
               <div className="max-h-60 overflow-y-auto custom-scrollbar">
                 <TemplatePreview templateId={templateId} />
+              </div>
+            )}
+
+            {/* Error Message */}
+            {error && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                ⚠️ {error}
               </div>
             )}
 
