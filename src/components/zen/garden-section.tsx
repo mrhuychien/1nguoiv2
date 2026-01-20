@@ -200,8 +200,11 @@ export function GardenSection({ className }: GardenSectionProps) {
     try {
       const data = JSON.parse(e.dataTransfer.getData("application/json"));
       if (data.taskId && data.taskType) {
-        // Set the dropped task as active and start it
+        // Set the dropped task as active
         setActiveTask(data.taskId);
+        // Also set it as timer task (like Timer does)
+        setTimerTask(data.taskId, data.taskType);
+        // Start template task if applicable
         if (data.taskType === "template") {
           startTemplateTaskInDb(data.taskId);
         }
@@ -322,10 +325,17 @@ export function GardenSection({ className }: GardenSectionProps) {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={cn(
-          "space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar rounded-lg transition-all",
-          isDragOver && "ring-2 ring-cyan-500/50 bg-cyan-500/5"
+          "space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar rounded-lg transition-all p-1",
+          isDragOver && "ring-2 ring-green-500/50 bg-green-500/5"
         )}
       >
+        {/* Drop hint when dragging */}
+        {isDragOver && (
+          <div className="p-3 rounded-lg border border-dashed border-green-500 bg-green-500/10 text-center animate-pulse">
+            <Sprout className="w-5 h-5 text-green-400 mx-auto mb-1" />
+            <p className="text-xs text-green-400">Thả task vào đây</p>
+          </div>
+        )}
         {sortedTasks.map((task) => {
           const status = STATUS_CONFIG[task.status];
           const StatusIcon = status.icon;
