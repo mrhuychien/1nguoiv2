@@ -65,6 +65,10 @@ interface ZenStoreState {
   // Work log - daily work history
   workLog: WorkLogEntry[];
 
+  // Panel order for customizable layout
+  centerPanelOrder: string[];
+  rightPanelOrder: string[];
+
   // Stats
   stats: ZenStats;
 
@@ -149,6 +153,11 @@ interface ZenStoreActions {
   getWorkLogByDate: (date: string) => WorkLogEntry[];
   clearWorkLog: () => void;
 
+  // Panel order actions
+  setCenterPanelOrder: (order: string[]) => void;
+  setRightPanelOrder: (order: string[]) => void;
+  resetPanelOrder: () => void;
+
   // UI actions
   setShowSessionComplete: (show: boolean) => void;
   setShowTaskCompleteDialog: (show: boolean) => void;
@@ -192,6 +201,10 @@ const initialState: ZenStoreState = {
   sessions: [],
 
   workLog: [],
+
+  // Default panel order
+  centerPanelOrder: ["garden", "worklog"],
+  rightPanelOrder: ["schedule", "stats"],
 
   stats: {
     todayMinutes: 0,
@@ -703,6 +716,22 @@ export const useZenStore = create<ZenStore>()(
         set({ workLog: [] });
       },
 
+      // Panel order actions
+      setCenterPanelOrder: (order) => {
+        set({ centerPanelOrder: order });
+      },
+
+      setRightPanelOrder: (order) => {
+        set({ rightPanelOrder: order });
+      },
+
+      resetPanelOrder: () => {
+        set({
+          centerPanelOrder: ["garden", "worklog"],
+          rightPanelOrder: ["schedule", "stats"],
+        });
+      },
+
       // UI actions
       setShowSessionComplete: (show) => set({ showSessionComplete: show }),
       setShowTaskCompleteDialog: (show) => set({ showTaskCompleteDialog: show }),
@@ -770,6 +799,8 @@ export const useZenStore = create<ZenStore>()(
         templateTasks: state.templateTasks,
         gardenTaskIds: state.gardenTaskIds,
         workLog: state.workLog,
+        centerPanelOrder: state.centerPanelOrder,
+        rightPanelOrder: state.rightPanelOrder,
       }),
     }
   )

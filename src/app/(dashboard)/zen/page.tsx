@@ -15,6 +15,8 @@ import {
   SessionCompleteOverlay,
   DeepWorkOverlay,
   WorkLogPanel,
+  DraggablePanel,
+  PanelContainer,
 } from "@/components/zen";
 import { useZenStore, getCurrentZone } from "@/store/zen-store";
 import { useProjectStore } from "@/store/project-store";
@@ -53,6 +55,10 @@ export default function ZenPage() {
     timerTargetMinutes,
     currentZone,
     addWorkLogEntry,
+    centerPanelOrder,
+    rightPanelOrder,
+    setCenterPanelOrder,
+    setRightPanelOrder,
   } = useZenStore();
 
   const isInitialized = projectsInitialized || zenInitialized;
@@ -352,31 +358,35 @@ export default function ZenPage() {
                   </div>
                 </section>
 
-                {/* Tasks Section */}
-                <section className="p-6 rounded-2xl bg-gray-900/50 border border-gray-800">
-                  <GardenSection />
-                </section>
+                {/* Draggable Center Panels */}
+                <PanelContainer
+                  panelOrder={centerPanelOrder}
+                  onReorder={setCenterPanelOrder}
+                >
+                  <DraggablePanel id="garden">
+                    <GardenSection />
+                  </DraggablePanel>
 
-                {/* Work Log Section */}
-                <section className="p-6 rounded-2xl bg-gray-900/50 border border-gray-800">
-                  <WorkLogPanel />
-                </section>
+                  <DraggablePanel id="worklog">
+                    <WorkLogPanel />
+                  </DraggablePanel>
+                </PanelContainer>
               </div>
 
               {/* Right sidebar - Schedule and Stats */}
-              <aside className="col-span-12 lg:col-span-3 space-y-6">
-                {/* Schedule */}
-                <section className="p-5 rounded-2xl bg-gray-900/50 border border-gray-800">
-                  <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider mb-4">
-                    Deep Work Zones
-                  </h3>
-                  <ZenSchedule />
-                </section>
+              <aside className="col-span-12 lg:col-span-3">
+                <PanelContainer
+                  panelOrder={rightPanelOrder}
+                  onReorder={setRightPanelOrder}
+                >
+                  <DraggablePanel id="schedule">
+                    <ZenSchedule />
+                  </DraggablePanel>
 
-                {/* Stats */}
-                <section className="p-5 rounded-2xl bg-gray-900/50 border border-gray-800">
-                  <DeepWorkZone />
-                </section>
+                  <DraggablePanel id="stats">
+                    <DeepWorkZone />
+                  </DraggablePanel>
+                </PanelContainer>
               </aside>
             </div>
           </div>
