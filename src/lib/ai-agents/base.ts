@@ -39,7 +39,7 @@ export const AGENT_CONFIGS: Record<AgentId, AIAgentConfig> = {
   lens: {
     agentId: 'lens',
     provider: 'anthropic',
-    model: 'claude-3-5-sonnet-20241022',
+    model: 'claude-3-5-sonnet-latest',
   },
   radar: {
     agentId: 'radar',
@@ -307,6 +307,7 @@ export function calculateCost(
     'gpt-4o': { input: 0.0025, output: 0.01 },
     'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
     // Anthropic models
+    'claude-3-5-sonnet-latest': { input: 0.003, output: 0.015 },
     'claude-sonnet-4-5-20250514': { input: 0.003, output: 0.015 },
     'claude-3-5-sonnet-20241022': { input: 0.003, output: 0.015 },
     'claude-3-haiku-20240307': { input: 0.00025, output: 0.00125 },
