@@ -41,6 +41,9 @@ export async function POST(
       return NextResponse.json({ error: 'Session is already completed' }, { status: 400 })
     }
 
+    // Allow retry for 'draft' or 'error' status
+    const isRetry = session.status === 'error'
+
     // Check available agents
     const availableAgents = await getAvailableAgents()
     if (availableAgents.length === 0) {
@@ -74,10 +77,32 @@ export async function POST(
 
     // Process rounds sequentially
     const previousOutputs: string[] = []
-    let totalCost = 0
+    let totalCost = session.total_cost || 0 // Keep existing cost if retrying
     let hasError = false
 
     for (const round of rounds) {
+      // Skip completed rounds (for retry scenarios)
+      if (round.status === 'completed') {
+        // Add completed round output to context for next rounds
+        if (round.output) {
+          previousOutputs.push(`[${round.role.toUpperCase()}]\n${round.output}`)
+        }
+        console.log(`Skipping completed round ${round.round_number}`)
+        continue
+      }
+
+      // Reset error status for retry
+      if (round.status === 'error' && isRetry) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('brainstorm_rounds')
+          .update({
+            status: 'pending',
+            error: null,
+          })
+          .eq('id', round.id)
+      }
+
       // Get effective agent (fallback to OpenAI if primary not available)
       const primaryAgent = round.agent_id as AgentId
       const effectiveAgent = getEffectiveAgent(primaryAgent, availableAgents)
