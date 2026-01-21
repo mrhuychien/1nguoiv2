@@ -125,7 +125,7 @@ async function testProviderApiKey(
           return {
             success: true,
             message: 'Anthropic API key is valid (rate limited)',
-            model: 'claude-3-5-sonnet-20241022',
+            model: 'claude-3-sonnet-20240229',
             latency: Date.now() - startTime,
           }
         }
@@ -135,7 +135,7 @@ async function testProviderApiKey(
       return {
         success: true,
         message: 'Anthropic API key is valid',
-        model: 'claude-3-5-sonnet-latest',
+        model: 'claude-3-sonnet-20240229',
         latency: Date.now() - startTime,
       }
     }
