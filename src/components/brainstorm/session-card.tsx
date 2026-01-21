@@ -30,7 +30,10 @@ export function SessionCard({ session, onStart, onView, onDelete, isStarting }: 
     : 0;
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card
+      className="hover:shadow-md transition-shadow cursor-pointer"
+      onClick={onView}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
@@ -79,7 +82,7 @@ export function SessionCard({ session, onStart, onView, onDelete, isStarting }: 
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {session.status === "draft" && (
             <Button size="sm" onClick={onStart} disabled={isStarting}>
               {isStarting ? (
@@ -90,12 +93,10 @@ export function SessionCard({ session, onStart, onView, onDelete, isStarting }: 
               Start
             </Button>
           )}
-          {(session.status === "running" || session.status === "completed") && (
-            <Button size="sm" variant="outline" onClick={onView}>
-              <Eye className="mr-2 h-4 w-4" />
-              View
-            </Button>
-          )}
+          <Button size="sm" variant="outline" onClick={onView}>
+            <Eye className="mr-2 h-4 w-4" />
+            View
+          </Button>
           <Button size="sm" variant="ghost" onClick={onDelete} className="text-destructive">
             <Trash2 className="h-4 w-4" />
           </Button>
