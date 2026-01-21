@@ -54,7 +54,7 @@ export default function BrainstormSessionPage() {
     )
   }
 
-  const canStart = currentSession.status === 'pending'
+  const canStart = currentSession.status === 'draft'
   const isComplete = currentSession.status === 'completed'
 
   return (
@@ -355,7 +355,7 @@ export default function BrainstormSessionPage() {
             </div>
           ) : (
             <div className="bg-white/5 border border-white/10 rounded-xl p-8 text-center">
-              {currentSession.status === 'pending' ? (
+              {currentSession.status === 'draft' ? (
                 <>
                   <Clock className="w-16 h-16 text-gray-500 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-white mb-2">
@@ -379,7 +379,7 @@ export default function BrainstormSessionPage() {
                 <>
                   <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-white mb-2">
-                    Phiên đã {currentSession.status === 'failed' ? 'thất bại' : 'bị hủy'}
+                    Phiên đã {currentSession.status === 'error' ? 'thất bại' : 'hoàn thành'}
                   </h3>
                 </>
               )}

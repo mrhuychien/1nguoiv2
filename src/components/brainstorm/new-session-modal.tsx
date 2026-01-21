@@ -198,7 +198,7 @@ export function NewSessionModal({
                       {AGENTS[agent].name}
                     </p>
                     <p className="text-xs text-gray-400 mt-1">
-                      {AGENTS[agent].role.replace('The ', '')}
+                      {AGENTS[agent].description.replace('The ', '')}
                     </p>
                   </button>
                 ))}

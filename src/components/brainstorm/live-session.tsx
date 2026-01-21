@@ -18,7 +18,7 @@ export function LiveSession({ session, rounds }: LiveSessionProps) {
 
   // Setup SSE connection for real-time updates
   useEffect(() => {
-    if (session.status !== 'running' && session.status !== 'pending') return
+    if (session.status !== 'running' && session.status !== 'draft') return
 
     const eventSource = new EventSource(`/api/brainstorm/${session.id}/stream`)
     eventSourceRef.current = eventSource

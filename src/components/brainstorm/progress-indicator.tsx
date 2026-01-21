@@ -1,13 +1,13 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { AGENTS, DEEP_MODE_ROUNDS, type AgentId } from '@/lib/types/brainstorm'
+import { AGENTS, DEEP_MODE_ROUNDS, type AgentId, type SessionStatus } from '@/lib/types/brainstorm'
 import { Check, Loader2 } from 'lucide-react'
 
 interface ProgressIndicatorProps {
   currentRound: number
   totalRounds: number
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  status: SessionStatus
   className?: string
 }
 

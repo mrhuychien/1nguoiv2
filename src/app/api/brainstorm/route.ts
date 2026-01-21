@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
       total_rounds: ROUNDS.length,
       current_round: 0,
       total_cost: 0,
+      final_verdict: null,
       created_at: now,
       updated_at: now,
       completed_at: null,

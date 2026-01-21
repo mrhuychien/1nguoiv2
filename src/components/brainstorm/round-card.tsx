@@ -13,14 +13,13 @@ interface RoundCardProps {
 
 export function RoundCard({ round, isExpanded: defaultExpanded = false }: RoundCardProps) {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
-  const agent = AGENTS[round.agent as AgentId]
+  const agent = AGENTS[round.agent_id as AgentId]
 
   const statusIcon = {
     pending: <Clock className="w-4 h-4 text-gray-400" />,
     running: <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />,
     completed: <Check className="w-4 h-4 text-green-400" />,
-    failed: <X className="w-4 h-4 text-red-400" />,
-    skipped: <Clock className="w-4 h-4 text-gray-400" />,
+    error: <X className="w-4 h-4 text-red-400" />,
   }
 
   const roleLabels: Record<string, string> = {
@@ -45,7 +44,7 @@ export function RoundCard({ round, isExpanded: defaultExpanded = false }: RoundC
         className="w-full flex items-center justify-between"
       >
         <div className="flex items-center gap-3">
-          <AgentAvatar agent={round.agent as AgentId} size="sm" />
+          <AgentAvatar agent={round.agent_id as AgentId} size="sm" />
           <div className="text-left">
             <div className="flex items-center gap-2">
               <span className={cn('font-semibold', agent.textColor)}>
@@ -73,10 +72,10 @@ export function RoundCard({ round, isExpanded: defaultExpanded = false }: RoundC
       </button>
 
       {/* Content */}
-      {isExpanded && round.output_content && (
+      {isExpanded && round.output && (
         <div className="mt-4 pt-4 border-t border-white/10">
           <div className="prose prose-invert prose-sm max-w-none text-gray-300 whitespace-pre-wrap">
-            {round.output_content}
+            {round.output}
           </div>
 
           {/* Stats */}
@@ -100,7 +99,7 @@ export function RoundCard({ round, isExpanded: defaultExpanded = false }: RoundC
       )}
 
       {/* Error state */}
-      {round.status === 'failed' && (
+      {round.status === 'error' && (
         <div className="mt-4 pt-4 border-t border-white/10">
           <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
             <p className="text-sm text-red-400">Da xay ra loi trong round nay</p>
