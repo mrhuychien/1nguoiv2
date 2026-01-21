@@ -15,6 +15,7 @@ export interface Database {
           email: string
           full_name: string | null
           avatar_url: string | null
+          role: 'user' | 'admin' | 'super_admin'
           created_at: string
           updated_at: string
         }
@@ -23,6 +24,7 @@ export interface Database {
           email: string
           full_name?: string | null
           avatar_url?: string | null
+          role?: 'user' | 'admin' | 'super_admin'
           created_at?: string
           updated_at?: string
         }
@@ -31,6 +33,7 @@ export interface Database {
           email?: string
           full_name?: string | null
           avatar_url?: string | null
+          role?: 'user' | 'admin' | 'super_admin'
           created_at?: string
           updated_at?: string
         }
@@ -340,6 +343,100 @@ export interface Database {
           updated_at?: string
         }
       }
+      ai_provider_settings: {
+        Row: {
+          id: string
+          provider: 'openai' | 'anthropic' | 'google' | 'xai'
+          display_name: string
+          api_key_encrypted: string | null
+          is_enabled: boolean
+          is_configured: boolean
+          total_requests: number
+          total_tokens: number
+          total_cost: number
+          last_used_at: string | null
+          created_at: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          provider: 'openai' | 'anthropic' | 'google' | 'xai'
+          display_name: string
+          api_key_encrypted?: string | null
+          is_enabled?: boolean
+          is_configured?: boolean
+          total_requests?: number
+          total_tokens?: number
+          total_cost?: number
+          last_used_at?: string | null
+          created_at?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          provider?: 'openai' | 'anthropic' | 'google' | 'xai'
+          display_name?: string
+          api_key_encrypted?: string | null
+          is_enabled?: boolean
+          is_configured?: boolean
+          total_requests?: number
+          total_tokens?: number
+          total_cost?: number
+          last_used_at?: string | null
+          created_at?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+      }
+      ai_usage_logs: {
+        Row: {
+          id: string
+          provider: string
+          user_id: string | null
+          session_id: string | null
+          round_id: string | null
+          model: string | null
+          tokens_input: number
+          tokens_output: number
+          cost: number
+          duration_ms: number
+          status: 'success' | 'error' | 'timeout'
+          error_message: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          provider: string
+          user_id?: string | null
+          session_id?: string | null
+          round_id?: string | null
+          model?: string | null
+          tokens_input?: number
+          tokens_output?: number
+          cost?: number
+          duration_ms?: number
+          status?: 'success' | 'error' | 'timeout'
+          error_message?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          provider?: string
+          user_id?: string | null
+          session_id?: string | null
+          round_id?: string | null
+          model?: string | null
+          tokens_input?: number
+          tokens_output?: number
+          cost?: number
+          duration_ms?: number
+          status?: 'success' | 'error' | 'timeout'
+          error_message?: string | null
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -384,3 +481,12 @@ export type NodeUpdate = Database['public']['Tables']['nodes']['Update']
 export type LinkUpdate = Database['public']['Tables']['links']['Update']
 export type TimeEntryUpdate = Database['public']['Tables']['time_entries']['Update']
 export type ZenStatsUpdate = Database['public']['Tables']['zen_stats']['Update']
+
+// AI Provider types
+export type AIProviderSettings = Database['public']['Tables']['ai_provider_settings']['Row']
+export type AIProviderSettingsInsert = Database['public']['Tables']['ai_provider_settings']['Insert']
+export type AIProviderSettingsUpdate = Database['public']['Tables']['ai_provider_settings']['Update']
+export type AIUsageLog = Database['public']['Tables']['ai_usage_logs']['Row']
+export type AIUsageLogInsert = Database['public']['Tables']['ai_usage_logs']['Insert']
+export type AIProvider = 'openai' | 'anthropic' | 'google' | 'xai'
+export type UserRole = 'user' | 'admin' | 'super_admin'

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Lightbulb, FolderKanban, Settings, LogOut, ChevronLeft, ChevronRight, X, Sparkles } from "lucide-react";
+import { LayoutDashboard, Lightbulb, FolderKanban, Settings, LogOut, ChevronLeft, ChevronRight, X, Sparkles, Brain, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,14 +27,28 @@ const navItems = [
     icon: Lightbulb,
   },
   {
+    href: "/brainstorm",
+    label: "Brainstorm",
+    icon: Brain,
+  },
+  {
     href: "/projects",
     label: "Projects",
     icon: FolderKanban,
   },
   {
     href: "/settings",
-    label: "Cài đặt",
+    label: "Cai dat",
     icon: Settings,
+  },
+];
+
+// Admin-only nav items
+const adminNavItems = [
+  {
+    href: "/admin",
+    label: "Admin",
+    icon: Shield,
   },
 ];
 
@@ -45,9 +59,15 @@ interface SidebarProps {
 
 export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
-  const { userInfo, signOut, isLoading } = useUser();
+  const { userInfo, profile, signOut, isLoading } = useUser();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+
+  // Check if user is admin
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
+
+  // Combine nav items based on role
+  const allNavItems = isAdmin ? [...navItems, ...adminNavItems] : navItems;
 
   // Prevent hydration mismatch by only rendering user content after mount
   useEffect(() => {
@@ -143,7 +163,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
               <ChevronRight className="h-4 w-4" />
             </button>
           )}
-          {navItems.map((item) => {
+          {allNavItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
 

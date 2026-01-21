@@ -28,6 +28,7 @@ import {
   Play,
   ArrowRight,
   Eye,
+  Brain,
 } from "lucide-react";
 
 type LifecycleFilter = "all" | "idea" | "designing" | "building" | "testing" | "shipped" | "paused";
@@ -143,6 +144,18 @@ function ProjectMenu({ project, onEdit, onDelete, onMoveNext, onPause, onResume 
               <Pencil className="h-4 w-4" />
               Chỉnh sửa
             </button>
+
+            {/* Brainstorm AI for idea stage projects */}
+            {project.lifecycle === "idea" && (
+              <Link
+                href={`/brainstorm?projectId=${project.id}&title=${encodeURIComponent(project.title)}&description=${encodeURIComponent(project.description || '')}`}
+                onClick={() => setIsOpen(false)}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-purple-500/10 flex items-center gap-2 text-purple-500"
+              >
+                <Brain className="h-4 w-4" />
+                Brainstorm AI
+              </Link>
+            )}
 
             {config.next && project.lifecycle !== "paused" && (
               <button
