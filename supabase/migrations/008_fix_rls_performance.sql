@@ -145,13 +145,12 @@ CREATE POLICY "Users can manage own rounds" ON public.brainstorm_rounds
 DROP POLICY IF EXISTS "Only admins can view AI settings" ON public.ai_provider_settings;
 DROP POLICY IF EXISTS "Only admins can update AI settings" ON public.ai_provider_settings;
 
--- For ai_provider_settings, we need to check admin status
--- Assuming there's an is_admin check in profiles or a specific function
+-- For ai_provider_settings, check admin role in profiles
 CREATE POLICY "Admins can view AI settings" ON public.ai_provider_settings
     FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM public.profiles
-            WHERE id = (select auth.uid()) AND is_admin = true
+            WHERE id = (select auth.uid()) AND role IN ('admin', 'super_admin')
         )
     );
 
@@ -159,7 +158,7 @@ CREATE POLICY "Admins can update AI settings" ON public.ai_provider_settings
     FOR UPDATE USING (
         EXISTS (
             SELECT 1 FROM public.profiles
-            WHERE id = (select auth.uid()) AND is_admin = true
+            WHERE id = (select auth.uid()) AND role IN ('admin', 'super_admin')
         )
     );
 
@@ -176,7 +175,7 @@ CREATE POLICY "Users can view logs" ON public.ai_usage_logs
         user_id = (select auth.uid())
         OR EXISTS (
             SELECT 1 FROM public.profiles
-            WHERE id = (select auth.uid()) AND is_admin = true
+            WHERE id = (select auth.uid()) AND role IN ('admin', 'super_admin')
         )
     );
 
