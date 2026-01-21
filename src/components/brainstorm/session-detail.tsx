@@ -93,20 +93,31 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
     setError(null);
 
     try {
-      const response = await fetch(`/api/brainstorm/${sessionId}/start`, {
+      // Start the API call but don't wait for it to complete
+      // The API will process all rounds synchronously
+      const fetchPromise = fetch(`/api/brainstorm/${sessionId}/start`, {
         method: "POST",
       });
-      const data = await response.json();
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to start session");
-      }
+      // Immediately update local state to "running" so SSE starts
+      setSession((prev) => prev ? { ...prev, status: "running" } : prev);
+      setIsStarting(false);
 
-      // Refresh data
-      await fetchSession();
+      // Handle the response in background
+      fetchPromise.then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) {
+          setError(data.error || "Failed to start session");
+          // Refresh to get actual state
+          await fetchSession();
+        }
+      }).catch((err) => {
+        setError(err instanceof Error ? err.message : "Failed to start session");
+        // Refresh to get actual state
+        fetchSession();
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start session");
-    } finally {
       setIsStarting(false);
     }
   };

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { callAgent, buildRolePrompt, getAvailableAgents, getEffectiveAgent } from '@/lib/ai-agents'
 import type { BrainstormSession, BrainstormRound, RoundRole, AgentId } from '@/lib/types/brainstorm'
@@ -229,13 +228,11 @@ export async function POST(
       })
       .eq('id', id)
 
-    // Process rounds in background using Next.js after()
-    after(async () => {
-      try {
-        await processRounds(id, user.id, session, rounds, availableAgents, isRetry)
-      } catch (error) {
+    // Process rounds - await to ensure completion on Vercel
+    // Client uses SSE to track real-time progress
+    await processRounds(id, user.id, session, rounds, availableAgents, isRetry)
+      .catch(async (error) => {
         console.error('Error processing rounds:', error)
-        // Update session to error state
         const supabase = await createClient()
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
@@ -245,14 +242,27 @@ export async function POST(
             updated_at: new Date().toISOString(),
           })
           .eq('id', id)
-      }
-    })
+      })
 
-    // Return immediately - client will use SSE to track progress
+    // Get final state
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: updatedSession } = await (supabase as any)
+      .from('brainstorm_sessions')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: updatedRounds } = await (supabase as any)
+      .from('brainstorm_rounds')
+      .select('*')
+      .eq('session_id', id)
+      .order('round_number', { ascending: true })
+
     return NextResponse.json({
-      success: true,
-      message: 'Session started',
-      session: { ...session, status: 'running' },
+      success: updatedSession?.status === 'completed',
+      session: updatedSession,
+      rounds: updatedRounds,
     })
   } catch (error) {
     console.error('Error in POST /api/brainstorm/[id]/start:', error)
