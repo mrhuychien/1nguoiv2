@@ -1,13 +1,11 @@
 import {
   Navbar,
   HeroSection,
-  ProblemSection,
-  PillarsSection,
+  Phase1Section,
+  Phase2Section,
+  Phase3Section,
   ToolsSection,
-  PersonasSection,
-  BuildInPublicSection,
-  PricingSection,
-  FAQSection,
+  AICouncilSection,
   CTASection,
   Footer,
 } from "@/components/landing";
@@ -17,13 +15,11 @@ export default function HomePage() {
     <main className="min-h-screen bg-background">
       <Navbar />
       <HeroSection />
-      <ProblemSection />
-      <PillarsSection />
+      <Phase1Section />
+      <Phase2Section />
+      <Phase3Section />
       <ToolsSection />
-      <PersonasSection />
-      <BuildInPublicSection />
-      <PricingSection />
-      <FAQSection />
+      <AICouncilSection />
       <CTASection />
       <Footer />
     </main>
