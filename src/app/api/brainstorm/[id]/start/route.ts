@@ -1,7 +1,162 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { callAgent, buildRolePrompt, getAvailableAgents, getEffectiveAgent } from '@/lib/ai-agents'
 import type { BrainstormSession, BrainstormRound, RoundRole, AgentId } from '@/lib/types/brainstorm'
+
+/**
+ * Process rounds in background
+ */
+async function processRounds(
+  sessionId: string,
+  userId: string,
+  session: BrainstormSession,
+  rounds: BrainstormRound[],
+  availableAgents: AgentId[],
+  isRetry: boolean
+) {
+  const supabase = await createClient()
+  const previousOutputs: string[] = []
+  let totalCost = session.total_cost || 0
+  let hasError = false
+
+  for (const round of rounds) {
+    // Skip completed rounds (for retry scenarios)
+    if (round.status === 'completed') {
+      if (round.output) {
+        previousOutputs.push(`[${round.role.toUpperCase()}]\n${round.output}`)
+      }
+      console.log(`Skipping completed round ${round.round_number}`)
+      continue
+    }
+
+    // Reset error status for retry
+    if (round.status === 'error' && isRetry) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('brainstorm_rounds')
+        .update({
+          status: 'pending',
+          error: null,
+        })
+        .eq('id', round.id)
+    }
+
+    // Get effective agent (fallback to OpenAI if primary not available)
+    const primaryAgent = round.agent_id as AgentId
+    const effectiveAgent = getEffectiveAgent(primaryAgent, availableAgents)
+
+    if (!effectiveAgent) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('brainstorm_rounds')
+        .update({
+          status: 'error',
+          error: `No AI agent available. Please configure at least OpenAI in admin panel.`,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', round.id)
+
+      hasError = true
+      break
+    }
+
+    const usingFallback = effectiveAgent !== primaryAgent
+    if (usingFallback) {
+      console.log(`Round ${round.round_number}: Using ${effectiveAgent} (fallback) instead of ${primaryAgent}`)
+    }
+
+    // Update round status to running
+    const startedAt = new Date().toISOString()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from('brainstorm_rounds')
+      .update({
+        status: 'running',
+        started_at: startedAt,
+        ...(usingFallback ? { agent_id: effectiveAgent } : {}),
+      })
+      .eq('id', round.id)
+
+    // Update session current round
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from('brainstorm_sessions')
+      .update({
+        current_round: round.round_number,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', sessionId)
+
+    // Build prompt
+    const prompt = buildRolePrompt(
+      round.role as RoundRole,
+      session.original_idea,
+      previousOutputs
+    )
+
+    // Call AI agent
+    const response = await callAgent(
+      effectiveAgent,
+      {
+        sessionId: sessionId,
+        roundId: round.id,
+        role: round.role as RoundRole,
+        originalIdea: session.original_idea,
+        previousOutputs,
+      },
+      userId
+    )
+
+    if (response.success) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('brainstorm_rounds')
+        .update({
+          status: 'completed',
+          prompt,
+          output: response.content,
+          tokens_input: response.tokensInput,
+          tokens_output: response.tokensOutput,
+          cost: response.cost,
+          duration_ms: response.durationMs,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', round.id)
+
+      previousOutputs.push(`[${round.role.toUpperCase()}]\n${response.content}`)
+      totalCost += response.cost
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('brainstorm_rounds')
+        .update({
+          status: 'error',
+          prompt,
+          error: response.error,
+          duration_ms: response.durationMs,
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', round.id)
+
+      hasError = true
+      break
+    }
+  }
+
+  // Update session final status
+  const finalStatus = hasError ? 'error' : 'completed'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (supabase as any)
+    .from('brainstorm_sessions')
+    .update({
+      status: finalStatus,
+      total_cost: totalCost,
+      completed_at: hasError ? null : new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', sessionId)
+}
 
 /**
  * POST /api/brainstorm/[id]/start
@@ -41,7 +196,6 @@ export async function POST(
       return NextResponse.json({ error: 'Session is already completed' }, { status: 400 })
     }
 
-    // Allow retry for 'draft' or 'error' status
     const isRetry = session.status === 'error'
 
     // Check available agents
@@ -65,7 +219,7 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to fetch rounds' }, { status: 500 })
     }
 
-    // Update session status to running
+    // Update session status to running immediately
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from('brainstorm_sessions')
@@ -75,194 +229,33 @@ export async function POST(
       })
       .eq('id', id)
 
-    // Process rounds sequentially
-    const previousOutputs: string[] = []
-    let totalCost = session.total_cost || 0 // Keep existing cost if retrying
-    let hasError = false
-
-    for (const round of rounds) {
-      // Skip completed rounds (for retry scenarios)
-      if (round.status === 'completed') {
-        // Add completed round output to context for next rounds
-        if (round.output) {
-          previousOutputs.push(`[${round.role.toUpperCase()}]\n${round.output}`)
-        }
-        console.log(`Skipping completed round ${round.round_number}`)
-        continue
-      }
-
-      // Reset error status for retry
-      if (round.status === 'error' && isRetry) {
+    // Process rounds in background using Next.js after()
+    after(async () => {
+      try {
+        await processRounds(id, user.id, session, rounds, availableAgents, isRetry)
+      } catch (error) {
+        console.error('Error processing rounds:', error)
+        // Update session to error state
+        const supabase = await createClient()
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
-          .from('brainstorm_rounds')
-          .update({
-            status: 'pending',
-            error: null,
-          })
-          .eq('id', round.id)
-      }
-
-      // Get effective agent (fallback to OpenAI if primary not available)
-      const primaryAgent = round.agent_id as AgentId
-      const effectiveAgent = getEffectiveAgent(primaryAgent, availableAgents)
-
-      if (!effectiveAgent) {
-        // No agent available at all
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
-          .from('brainstorm_rounds')
+          .from('brainstorm_sessions')
           .update({
             status: 'error',
-            error: `No AI agent available. Please configure at least OpenAI in admin panel.`,
-            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', round.id)
-
-        hasError = true
-        break
+          .eq('id', id)
       }
+    })
 
-      // Log if using fallback
-      const usingFallback = effectiveAgent !== primaryAgent
-      if (usingFallback) {
-        console.log(`Round ${round.round_number}: Using ${effectiveAgent} (fallback) instead of ${primaryAgent}`)
-      }
-
-      // Update round status to running
-      const startedAt = new Date().toISOString()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('brainstorm_rounds')
-        .update({
-          status: 'running',
-          started_at: startedAt,
-          // Update agent_id if using fallback
-          ...(usingFallback ? { agent_id: effectiveAgent } : {}),
-        })
-        .eq('id', round.id)
-
-      // Update session current round
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('brainstorm_sessions')
-        .update({
-          current_round: round.round_number,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-
-      // Build prompt
-      const prompt = buildRolePrompt(
-        round.role as RoundRole,
-        session.original_idea,
-        previousOutputs
-      )
-
-      // Call AI agent (using effective agent which may be fallback)
-      const response = await callAgent(
-        effectiveAgent,
-        {
-          sessionId: id,
-          roundId: round.id,
-          role: round.role as RoundRole,
-          originalIdea: session.original_idea,
-          previousOutputs,
-        },
-        user.id
-      )
-
-      if (response.success) {
-        // Update round with success
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
-          .from('brainstorm_rounds')
-          .update({
-            status: 'completed',
-            prompt,
-            output: response.content,
-            tokens_input: response.tokensInput,
-            tokens_output: response.tokensOutput,
-            cost: response.cost,
-            duration_ms: response.durationMs,
-            completed_at: new Date().toISOString(),
-          })
-          .eq('id', round.id)
-
-        // Add to previous outputs for next round
-        previousOutputs.push(`[${round.role.toUpperCase()}]\n${response.content}`)
-        totalCost += response.cost
-      } else {
-        // Update round with error
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
-          .from('brainstorm_rounds')
-          .update({
-            status: 'error',
-            prompt,
-            error: response.error,
-            duration_ms: response.durationMs,
-            completed_at: new Date().toISOString(),
-          })
-          .eq('id', round.id)
-
-        hasError = true
-        break
-      }
-    }
-
-    // Update session final status
-    const finalStatus = hasError ? 'error' : 'completed'
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
-      .from('brainstorm_sessions')
-      .update({
-        status: finalStatus,
-        total_cost: totalCost,
-        completed_at: hasError ? null : new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
-
-    // Fetch updated session and rounds
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedSession } = await (supabase as any)
-      .from('brainstorm_sessions')
-      .select('*')
-      .eq('id', id)
-      .single()
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: updatedRounds } = await (supabase as any)
-      .from('brainstorm_rounds')
-      .select('*')
-      .eq('session_id', id)
-      .order('round_number', { ascending: true })
-
+    // Return immediately - client will use SSE to track progress
     return NextResponse.json({
-      success: !hasError,
-      session: updatedSession,
-      rounds: updatedRounds,
+      success: true,
+      message: 'Session started',
+      session: { ...session, status: 'running' },
     })
   } catch (error) {
     console.error('Error in POST /api/brainstorm/[id]/start:', error)
-
-    // Try to update session status to error
-    try {
-      const { id } = await params
-      const supabase = await createClient()
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('brainstorm_sessions')
-        .update({
-          status: 'error',
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-    } catch {
-      // Ignore error in error handler
-    }
-
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
