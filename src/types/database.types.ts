@@ -340,6 +340,147 @@ export interface Database {
           updated_at?: string
         }
       }
+      brainstorm_sessions: {
+        Row: {
+          id: string
+          user_id: string
+          project_id: string | null
+          title: string
+          original_idea: string
+          mode: 'quick' | 'deep'
+          quick_mode_agent: 'spark' | 'lens' | 'radar' | 'devil' | null
+          status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+          current_round: number
+          total_rounds: number
+          final_verdict: Json | null
+          duration_seconds: number
+          started_at: string | null
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          project_id?: string | null
+          title: string
+          original_idea: string
+          mode?: 'quick' | 'deep'
+          quick_mode_agent?: 'spark' | 'lens' | 'radar' | 'devil' | null
+          status?: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+          current_round?: number
+          total_rounds?: number
+          final_verdict?: Json | null
+          duration_seconds?: number
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          project_id?: string | null
+          title?: string
+          original_idea?: string
+          mode?: 'quick' | 'deep'
+          quick_mode_agent?: 'spark' | 'lens' | 'radar' | 'devil' | null
+          status?: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+          current_round?: number
+          total_rounds?: number
+          final_verdict?: Json | null
+          duration_seconds?: number
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      brainstorm_rounds: {
+        Row: {
+          id: string
+          session_id: string
+          round_number: number
+          agent: 'spark' | 'lens' | 'radar' | 'devil'
+          role: string
+          status: 'pending' | 'running' | 'completed' | 'failed'
+          input_context: string | null
+          output_content: string | null
+          output_structured: Json | null
+          tokens_used: number
+          duration_ms: number
+          started_at: string | null
+          completed_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          round_number: number
+          agent: 'spark' | 'lens' | 'radar' | 'devil'
+          role: string
+          status?: 'pending' | 'running' | 'completed' | 'failed'
+          input_context?: string | null
+          output_content?: string | null
+          output_structured?: Json | null
+          tokens_used?: number
+          duration_ms?: number
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          round_number?: number
+          agent?: 'spark' | 'lens' | 'radar' | 'devil'
+          role?: string
+          status?: 'pending' | 'running' | 'completed' | 'failed'
+          input_context?: string | null
+          output_content?: string | null
+          output_structured?: Json | null
+          tokens_used?: number
+          duration_ms?: number
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+        }
+      }
+      brainstorm_insights: {
+        Row: {
+          id: string
+          session_id: string
+          round_id: string | null
+          type: 'idea' | 'strength' | 'weakness' | 'opportunity' | 'threat' | 'risk' | 'question'
+          title: string
+          content: string | null
+          importance: number
+          source_agent: 'spark' | 'lens' | 'radar' | 'devil' | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          round_id?: string | null
+          type: 'idea' | 'strength' | 'weakness' | 'opportunity' | 'threat' | 'risk' | 'question'
+          title: string
+          content?: string | null
+          importance?: number
+          source_agent?: 'spark' | 'lens' | 'radar' | 'devil' | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          round_id?: string | null
+          type?: 'idea' | 'strength' | 'weakness' | 'opportunity' | 'threat' | 'risk' | 'question'
+          title?: string
+          content?: string | null
+          importance?: number
+          source_agent?: 'spark' | 'lens' | 'radar' | 'devil' | null
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -384,3 +525,14 @@ export type NodeUpdate = Database['public']['Tables']['nodes']['Update']
 export type LinkUpdate = Database['public']['Tables']['links']['Update']
 export type TimeEntryUpdate = Database['public']['Tables']['time_entries']['Update']
 export type ZenStatsUpdate = Database['public']['Tables']['zen_stats']['Update']
+
+// Brainstorm types
+export type BrainstormSessionRow = Database['public']['Tables']['brainstorm_sessions']['Row']
+export type BrainstormSessionInsert = Database['public']['Tables']['brainstorm_sessions']['Insert']
+export type BrainstormSessionUpdate = Database['public']['Tables']['brainstorm_sessions']['Update']
+export type BrainstormRoundRow = Database['public']['Tables']['brainstorm_rounds']['Row']
+export type BrainstormRoundInsert = Database['public']['Tables']['brainstorm_rounds']['Insert']
+export type BrainstormRoundUpdate = Database['public']['Tables']['brainstorm_rounds']['Update']
+export type BrainstormInsightRow = Database['public']['Tables']['brainstorm_insights']['Row']
+export type BrainstormInsightInsert = Database['public']['Tables']['brainstorm_insights']['Insert']
+export type BrainstormInsightUpdate = Database['public']['Tables']['brainstorm_insights']['Update']
