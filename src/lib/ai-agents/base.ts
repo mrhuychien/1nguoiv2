@@ -39,7 +39,7 @@ export const AGENT_CONFIGS: Record<AgentId, AIAgentConfig> = {
   lens: {
     agentId: 'lens',
     provider: 'anthropic',
-    model: 'claude-sonnet-4-5-20250514',
+    model: 'claude-3-5-sonnet-20241022',
   },
   radar: {
     agentId: 'radar',
