@@ -160,8 +160,12 @@ export function SessionDetail({ sessionId, onBack }: SessionDetailProps) {
             </Button>
           )}
           {session.status === "error" && (
-            <Button variant="outline" onClick={fetchSession}>
-              <RefreshCw className="mr-2 h-4 w-4" />
+            <Button onClick={handleStart} disabled={isStarting}>
+              {isStarting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
               Retry
             </Button>
           )}
