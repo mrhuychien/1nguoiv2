@@ -120,6 +120,36 @@ export async function getAvailableAgents(): Promise<AgentId[]> {
 }
 
 /**
+ * Get effective agent for a role - uses fallback to OpenAI if primary agent unavailable
+ * @param agentId - The primary agent ID
+ * @param availableAgents - List of available agents
+ * @returns The agent ID to use (original or fallback)
+ */
+export function getEffectiveAgent(agentId: AgentId, availableAgents: AgentId[]): AgentId | null {
+  // If primary agent is available, use it
+  if (availableAgents.includes(agentId)) {
+    return agentId
+  }
+
+  // Fallback to OpenAI (spark) if available
+  if (availableAgents.includes('spark')) {
+    console.log(`Agent ${agentId} not available, falling back to spark (OpenAI)`)
+    return 'spark'
+  }
+
+  // No fallback available
+  return null
+}
+
+/**
+ * Check if at least one agent (OpenAI) is available to run brainstorm
+ */
+export async function hasAnyAgentAvailable(): Promise<boolean> {
+  const agents = await getAvailableAgents()
+  return agents.length > 0
+}
+
+/**
  * Log AI usage for tracking and billing
  */
 export async function logAIUsage(

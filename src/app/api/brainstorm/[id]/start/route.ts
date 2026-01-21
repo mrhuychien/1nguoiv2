@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { callAgentForRole, buildRolePrompt, getAvailableAgents } from '@/lib/ai-agents'
-import type { BrainstormSession, BrainstormRound, RoundRole } from '@/lib/types/brainstorm'
+import { callAgent, buildRolePrompt, getAvailableAgents, getEffectiveAgent } from '@/lib/ai-agents'
+import type { BrainstormSession, BrainstormRound, RoundRole, AgentId } from '@/lib/types/brainstorm'
 
 /**
  * POST /api/brainstorm/[id]/start
@@ -78,22 +78,30 @@ export async function POST(
     let hasError = false
 
     for (const round of rounds) {
-      // Check if agent for this role is available
-      const requiredAgent = round.agent_id
-      if (!availableAgents.includes(requiredAgent)) {
-        // Update round with error
+      // Get effective agent (fallback to OpenAI if primary not available)
+      const primaryAgent = round.agent_id as AgentId
+      const effectiveAgent = getEffectiveAgent(primaryAgent, availableAgents)
+
+      if (!effectiveAgent) {
+        // No agent available at all
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await (supabase as any)
           .from('brainstorm_rounds')
           .update({
             status: 'error',
-            error: `Agent ${requiredAgent} is not available. Please configure the API key.`,
+            error: `No AI agent available. Please configure at least OpenAI in admin panel.`,
             completed_at: new Date().toISOString(),
           })
           .eq('id', round.id)
 
         hasError = true
         break
+      }
+
+      // Log if using fallback
+      const usingFallback = effectiveAgent !== primaryAgent
+      if (usingFallback) {
+        console.log(`Round ${round.round_number}: Using ${effectiveAgent} (fallback) instead of ${primaryAgent}`)
       }
 
       // Update round status to running
@@ -104,6 +112,8 @@ export async function POST(
         .update({
           status: 'running',
           started_at: startedAt,
+          // Update agent_id if using fallback
+          ...(usingFallback ? { agent_id: effectiveAgent } : {}),
         })
         .eq('id', round.id)
 
@@ -124,9 +134,9 @@ export async function POST(
         previousOutputs
       )
 
-      // Call AI agent
-      const response = await callAgentForRole(
-        round.role as RoundRole,
+      // Call AI agent (using effective agent which may be fallback)
+      const response = await callAgent(
+        effectiveAgent,
         {
           sessionId: id,
           roundId: round.id,
