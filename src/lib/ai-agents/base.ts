@@ -44,7 +44,7 @@ export const AGENT_CONFIGS: Record<AgentId, AIAgentConfig> = {
   radar: {
     agentId: 'radar',
     provider: 'google',
-    model: 'gemini-2.5-pro-preview-05-06',
+    model: 'gemini-2.0-flash',
   },
   devil: {
     agentId: 'devil',
@@ -311,7 +311,7 @@ export function calculateCost(
     'claude-3-5-sonnet-20241022': { input: 0.003, output: 0.015 },
     'claude-3-haiku-20240307': { input: 0.00025, output: 0.00125 },
     // Google models
-    'gemini-2.5-pro-preview-05-06': { input: 0.00125, output: 0.005 },
+    'gemini-2.0-flash': { input: 0.0001, output: 0.0004 },
     'gemini-1.5-pro': { input: 0.00125, output: 0.005 },
     'gemini-1.5-flash': { input: 0.000075, output: 0.0003 },
     // xAI models
