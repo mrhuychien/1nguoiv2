@@ -26,6 +26,9 @@ CREATE TABLE IF NOT EXISTS public.brainstorm_sessions (
     -- Cost tracking
     total_cost DECIMAL(10, 6) DEFAULT 0,
 
+    -- Final verdict (JSON)
+    final_verdict JSONB,
+
     -- Timestamps
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
