@@ -23,6 +23,7 @@ import {
   CheckCircle,
   Clock,
   RotateCcw,
+  Wand2,
 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -426,6 +427,12 @@ export default function ProjectDetailPage() {
               Tạm dừng
             </Button>
           )}
+          <Button asChild className="bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600">
+            <Link href={`/projects/${project.id}/vibecode`}>
+              <Wand2 className="h-4 w-4 mr-2" />
+              Vibecode
+            </Link>
+          </Button>
           <Button variant="danger" size="icon" onClick={handleDeleteProject}>
             <Trash2 className="h-4 w-4" />
           </Button>
