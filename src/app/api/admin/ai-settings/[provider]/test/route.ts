@@ -94,7 +94,7 @@ async function testProviderApiKey(
       return {
         success: true,
         message: 'OpenAI API key is valid',
-        model: 'gpt-4.1',
+        model: 'gpt-5.2-2025-12-11',
         latency: Date.now() - startTime,
       }
     }
@@ -125,7 +125,7 @@ async function testProviderApiKey(
           return {
             success: true,
             message: 'Anthropic API key is valid (rate limited)',
-            model: 'claude-3-sonnet-20240229',
+            model: 'claude-sonnet-4-5-20250929',
             latency: Date.now() - startTime,
           }
         }
@@ -135,7 +135,7 @@ async function testProviderApiKey(
       return {
         success: true,
         message: 'Anthropic API key is valid',
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-sonnet-4-5-20250929',
         latency: Date.now() - startTime,
       }
     }
@@ -154,7 +154,7 @@ async function testProviderApiKey(
       return {
         success: true,
         message: 'Google AI API key is valid',
-        model: 'gemini-2.0-flash',
+        model: 'gemini-2.5-pro',
         latency: Date.now() - startTime,
       }
     }
@@ -177,7 +177,7 @@ async function testProviderApiKey(
             Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            model: 'grok-3',
+            model: 'grok-4-1-fast-reasoning',
             messages: [{ role: 'user', content: 'Hi' }],
             max_tokens: 1,
           }),
@@ -192,7 +192,7 @@ async function testProviderApiKey(
       return {
         success: true,
         message: 'xAI API key is valid',
-        model: 'grok-3',
+        model: 'grok-4-1-fast-reasoning',
         latency: Date.now() - startTime,
       }
     }

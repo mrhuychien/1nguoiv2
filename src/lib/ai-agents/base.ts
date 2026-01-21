@@ -34,22 +34,22 @@ export const AGENT_CONFIGS: Record<AgentId, AIAgentConfig> = {
   spark: {
     agentId: 'spark',
     provider: 'openai',
-    model: 'gpt-4.1',
+    model: 'gpt-5.2-2025-12-11',
   },
   lens: {
     agentId: 'lens',
     provider: 'anthropic',
-    model: 'claude-3-sonnet-20240229',
+    model: 'claude-sonnet-4-5-20250929',
   },
   radar: {
     agentId: 'radar',
     provider: 'google',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-pro',
   },
   devil: {
     agentId: 'devil',
     provider: 'xai',
-    model: 'grok-3',
+    model: 'grok-4-1-fast-reasoning',
   },
 }
 
@@ -303,20 +303,17 @@ export function calculateCost(
 ): number {
   const pricing: Record<string, { input: number; output: number }> = {
     // OpenAI models
-    'gpt-4.1': { input: 0.002, output: 0.008 },
+    'gpt-5.2-2025-12-11': { input: 0.002, output: 0.008 },
     'gpt-4o': { input: 0.0025, output: 0.01 },
     'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
     // Anthropic models
-    'claude-3-sonnet-20240229': { input: 0.003, output: 0.015 },
-    'claude-3-5-sonnet-20241022': { input: 0.003, output: 0.015 },
+    'claude-sonnet-4-5-20250929': { input: 0.003, output: 0.015 },
     'claude-3-haiku-20240307': { input: 0.00025, output: 0.00125 },
     // Google models
+    'gemini-2.5-pro': { input: 0.00125, output: 0.005 },
     'gemini-2.0-flash': { input: 0.0001, output: 0.0004 },
-    'gemini-1.5-pro': { input: 0.00125, output: 0.005 },
-    'gemini-1.5-flash': { input: 0.000075, output: 0.0003 },
     // xAI models
-    'grok-3': { input: 0.003, output: 0.015 },
-    'grok-beta': { input: 0.005, output: 0.015 },
+    'grok-4-1-fast-reasoning': { input: 0.003, output: 0.015 },
   }
 
   const modelPricing = pricing[model] || { input: 0.001, output: 0.002 }
