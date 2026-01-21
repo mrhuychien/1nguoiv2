@@ -40,17 +40,13 @@ WITH (security_invoker = true)
 AS
 SELECT
     provider,
+    display_name,
     is_enabled,
-    CASE
-        WHEN api_key IS NOT NULL AND api_key != '' THEN true
-        ELSE false
-    END as has_api_key,
-    default_model,
-    fallback_model,
-    max_tokens,
-    temperature,
-    rate_limit_rpm,
-    rate_limit_tpd,
+    is_configured,
+    total_requests,
+    total_tokens,
+    total_cost,
+    last_used_at,
     updated_at
 FROM public.ai_provider_settings;
 
