@@ -331,6 +331,10 @@ function createTransformStream(
                 tokensInput = parsed.usage.prompt_tokens || 0
                 tokensOutput = parsed.usage.completion_tokens || 0
               }
+              // OpenAI/xAI signals end with finish_reason
+              if (parsed.choices?.[0]?.finish_reason === 'stop') {
+                controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+              }
             } else if (provider === 'google') {
               if (parsed.candidates?.[0]?.content?.parts?.[0]?.text) {
                 content = parsed.candidates[0].content.parts[0].text
