@@ -375,15 +375,15 @@ function createTransformStream(
           duration_ms: durationMs,
         })
 
-        // Update session totals
+        // Update session totals using raw SQL increment
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (context.supabase as any)
-          .from('combat_sessions')
-          .update({
-            total_tokens: context.supabase.rpc ? undefined : tokensInput + tokensOutput,
-            total_cost: context.supabase.rpc ? undefined : cost,
-          })
-          .eq('id', context.session_id)
+        await (context.supabase as any).rpc('increment_combat_session_stats', {
+          p_session_id: context.session_id,
+          p_tokens: tokensInput + tokensOutput,
+          p_cost: cost,
+        }).catch(() => {
+          // Fallback: RPC might not exist yet, ignore error
+        })
       }
     },
   })

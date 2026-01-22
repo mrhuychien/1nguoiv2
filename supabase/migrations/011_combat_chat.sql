@@ -120,3 +120,21 @@ CREATE TRIGGER trigger_update_combat_message_count
     AFTER INSERT ON public.combat_messages
     FOR EACH ROW
     EXECUTE FUNCTION update_combat_message_count();
+
+-- 4. RPC to increment session stats
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION increment_combat_session_stats(
+    p_session_id UUID,
+    p_tokens INTEGER,
+    p_cost DECIMAL(10, 4)
+)
+RETURNS VOID AS $$
+BEGIN
+    UPDATE public.combat_sessions
+    SET
+        total_tokens = total_tokens + p_tokens,
+        total_cost = total_cost + p_cost
+    WHERE id = p_session_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
