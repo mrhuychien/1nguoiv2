@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Lightbulb, FolderKanban, Settings, LogOut, ChevronLeft, ChevronRight, X, Sparkles, Brain, Shield } from "lucide-react";
+import { LayoutDashboard, Lightbulb, FolderKanban, Settings, LogOut, ChevronLeft, ChevronRight, X, Sparkles, Brain, Shield, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -30,6 +30,11 @@ const navItems = [
     href: "/brainstorm",
     label: "Brainstorm",
     icon: Brain,
+  },
+  {
+    href: "/combat",
+    label: "Combat",
+    icon: Swords,
   },
   {
     href: "/projects",
