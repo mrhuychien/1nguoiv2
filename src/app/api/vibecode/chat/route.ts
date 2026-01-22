@@ -5,9 +5,11 @@ import {
   buildContextString,
   formatMessagesForAPI
 } from '@/lib/services/vibecode-ai'
+import { getProviderApiKey } from '@/lib/ai-agents/base'
 import type { VibeCodeStep } from '@/lib/types/vibecode'
 
-export const runtime = 'edge'
+// Use Node.js runtime for crypto support (needed for API key decryption)
+export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   try {
@@ -60,10 +62,11 @@ export async function POST(request: NextRequest) {
       message
     )
 
-    // Check if API key is configured
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.error('ANTHROPIC_API_KEY is not configured')
-      return new Response(JSON.stringify({ error: 'AI service not configured' }), {
+    // Get API key from database (configured in admin panel)
+    const apiKey = await getProviderApiKey('anthropic')
+    if (!apiKey) {
+      console.error('Anthropic API key not configured in admin settings')
+      return new Response(JSON.stringify({ error: 'AI service not configured. Please configure Anthropic API key in admin panel.' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -80,7 +83,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { STEP_PROMPTS, buildContextString, GENERATE_PROMPTS } from '@/lib/services/vibecode-ai'
+import { getProviderApiKey } from '@/lib/ai-agents/base'
 import type { ArtifactType } from '@/lib/types/vibecode'
 
 export async function POST(request: NextRequest) {
@@ -56,12 +57,18 @@ export async function POST(request: NextRequest) {
     // Determine which step prompt to use
     const stepForType = type === 'blueprint' ? 3 : type === 'contract' ? 4 : 5
 
+    // Get API key from database
+    const apiKey = await getProviderApiKey('anthropic')
+    if (!apiKey) {
+      return NextResponse.json({ error: 'AI service not configured. Please configure Anthropic API key in admin panel.' }, { status: 500 })
+    }
+
     // Generate artifact
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
