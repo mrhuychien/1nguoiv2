@@ -34,7 +34,7 @@ export const AGENT_CONFIGS: Record<AgentId, AIAgentConfig> = {
   spark: {
     agentId: 'spark',
     provider: 'openai',
-    model: 'gpt-4o',
+    model: 'gpt-5.2-2025-12-11',
   },
   lens: {
     agentId: 'lens',
@@ -44,12 +44,12 @@ export const AGENT_CONFIGS: Record<AgentId, AIAgentConfig> = {
   radar: {
     agentId: 'radar',
     provider: 'google',
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-pro',
   },
   devil: {
     agentId: 'devil',
     provider: 'xai',
-    model: 'grok-3-fast',
+    model: 'grok-4-1-fast-reasoning',
   },
 }
 
