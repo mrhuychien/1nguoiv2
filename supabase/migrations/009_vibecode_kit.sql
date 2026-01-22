@@ -128,7 +128,8 @@ BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = '';
 
 DROP TRIGGER IF EXISTS trigger_update_vibecode_session_timestamp ON public.vibecode_sessions;
 CREATE TRIGGER trigger_update_vibecode_session_timestamp
@@ -142,7 +143,8 @@ BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = '';
 
 DROP TRIGGER IF EXISTS trigger_update_vibecode_artifact_timestamp ON public.vibecode_artifacts;
 CREATE TRIGGER trigger_update_vibecode_artifact_timestamp
