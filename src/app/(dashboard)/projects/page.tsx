@@ -29,6 +29,7 @@ import {
   ArrowRight,
   Eye,
   Brain,
+  Wand2,
 } from "lucide-react";
 
 type LifecycleFilter = "all" | "idea" | "designing" | "building" | "testing" | "shipped" | "paused";
@@ -156,6 +157,16 @@ function ProjectMenu({ project, onEdit, onDelete, onMoveNext, onPause, onResume 
                 Brainstorm AI
               </Link>
             )}
+
+            {/* Vibecode Kit */}
+            <Link
+              href={`/projects/${project.id}/vibecode`}
+              onClick={() => setIsOpen(false)}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-cyan-500/10 flex items-center gap-2 text-cyan-500"
+            >
+              <Wand2 className="h-4 w-4" />
+              Vibecode Kit
+            </Link>
 
             {config.next && project.lifecycle !== "paused" && (
               <button
