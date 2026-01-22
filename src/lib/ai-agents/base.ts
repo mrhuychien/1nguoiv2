@@ -34,7 +34,7 @@ export const AGENT_CONFIGS: Record<AgentId, AIAgentConfig> = {
   spark: {
     agentId: 'spark',
     provider: 'openai',
-    model: 'gpt-5.2-2025-12-11',
+    model: 'gpt-4o',
   },
   lens: {
     agentId: 'lens',
@@ -44,12 +44,12 @@ export const AGENT_CONFIGS: Record<AgentId, AIAgentConfig> = {
   radar: {
     agentId: 'radar',
     provider: 'google',
-    model: 'gemini-2.5-pro',
+    model: 'gemini-2.0-flash',
   },
   devil: {
     agentId: 'devil',
     provider: 'xai',
-    model: 'grok-4-1-fast-reasoning',
+    model: 'grok-3-fast',
   },
 }
 
@@ -314,6 +314,7 @@ export function calculateCost(
     'gemini-2.0-flash': { input: 0.0001, output: 0.0004 },
     // xAI models
     'grok-4-1-fast-reasoning': { input: 0.003, output: 0.015 },
+    'grok-3-fast': { input: 0.005, output: 0.015 },
   }
 
   const modelPricing = pricing[model] || { input: 0.001, output: 0.002 }
