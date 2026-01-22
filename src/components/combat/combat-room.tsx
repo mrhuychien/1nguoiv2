@@ -141,6 +141,16 @@ export function CombatRoom() {
 
   if (!session) return null
 
+  // Calculate totals from messages
+  const sessionStats = messages.reduce(
+    (acc, msg) => ({
+      totalTokens: acc.totalTokens + msg.tokens_input + msg.tokens_output,
+      totalCost: acc.totalCost + msg.cost,
+      messageCount: acc.messageCount + (msg.role !== 'user' && msg.role !== 'system' ? 1 : 0),
+    }),
+    { totalTokens: 0, totalCost: 0, messageCount: 0 }
+  )
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
       {/* Header */}
@@ -162,15 +172,32 @@ export function CombatRoom() {
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleEnd}
-          className="border-red-500/50 text-red-400 hover:bg-red-500/10"
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          Kết thúc
-        </Button>
+        <div className="flex items-center gap-4">
+          {/* Session stats */}
+          {sessionStats.totalTokens > 0 && (
+            <div className="flex items-center gap-3 text-xs text-slate-400 bg-slate-800/50 px-3 py-1.5 rounded-lg">
+              <span title="Tổng câu trả lời AI">
+                💬 {sessionStats.messageCount}
+              </span>
+              <span title="Tổng tokens">
+                🎯 {sessionStats.totalTokens.toLocaleString()}
+              </span>
+              <span title="Tổng chi phí">
+                💰 ${sessionStats.totalCost.toFixed(4)}
+              </span>
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleEnd}
+            className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Kết thúc
+          </Button>
+        </div>
       </div>
 
       {/* Agent selector bar */}
