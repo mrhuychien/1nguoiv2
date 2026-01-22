@@ -128,7 +128,8 @@ BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = '';
 
 DROP TRIGGER IF EXISTS trigger_update_vibecode_session_timestamp ON public.vibecode_sessions;
 CREATE TRIGGER trigger_update_vibecode_session_timestamp
@@ -142,7 +143,8 @@ BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = '';
 
 DROP TRIGGER IF EXISTS trigger_update_vibecode_artifact_timestamp ON public.vibecode_artifacts;
 CREATE TRIGGER trigger_update_vibecode_artifact_timestamp
@@ -154,7 +156,12 @@ CREATE TRIGGER trigger_update_vibecode_artifact_timestamp
 -- 5. Helper view for sessions with stats
 -- ═══════════════════════════════════════════════════════════════════════════════
 
-CREATE OR REPLACE VIEW public.vibecode_sessions_with_stats AS
+-- Drop existing view first to recreate with security_invoker
+DROP VIEW IF EXISTS public.vibecode_sessions_with_stats;
+
+CREATE VIEW public.vibecode_sessions_with_stats
+WITH (security_invoker = true)
+AS
 SELECT
     vs.*,
     COUNT(DISTINCT va.id) AS total_artifacts,

@@ -56,17 +56,18 @@ CREATE OR REPLACE FUNCTION upsert_zen_stats(
 )
 RETURNS zen_stats
 LANGUAGE plpgsql
+SET search_path = ''
 AS $$
 DECLARE
-  result zen_stats;
+  result public.zen_stats;
 BEGIN
-  INSERT INTO zen_stats (user_id, date, today_minutes, flow_sessions, tasks_completed)
+  INSERT INTO public.zen_stats (user_id, date, today_minutes, flow_sessions, tasks_completed)
   VALUES (p_user_id, CURRENT_DATE, p_today_minutes, p_flow_sessions, p_tasks_completed)
   ON CONFLICT (user_id, date)
   DO UPDATE SET
-    today_minutes = zen_stats.today_minutes + p_today_minutes,
-    flow_sessions = zen_stats.flow_sessions + p_flow_sessions,
-    tasks_completed = zen_stats.tasks_completed + p_tasks_completed,
+    today_minutes = public.zen_stats.today_minutes + p_today_minutes,
+    flow_sessions = public.zen_stats.flow_sessions + p_flow_sessions,
+    tasks_completed = public.zen_stats.tasks_completed + p_tasks_completed,
     updated_at = NOW()
   RETURNING * INTO result;
 

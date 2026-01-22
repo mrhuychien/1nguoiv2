@@ -134,7 +134,8 @@ RETURNS BYTEA AS $$
 BEGIN
     RETURN pgp_sym_encrypt(plain_key, encryption_secret);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = '';
 
 -- Function to decrypt API key (only callable by authenticated users with admin role)
 CREATE OR REPLACE FUNCTION decrypt_api_key(encrypted_key BYTEA, encryption_secret TEXT)
@@ -151,7 +152,8 @@ BEGIN
 
     RETURN pgp_sym_decrypt(encrypted_key, encryption_secret);
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = '';
 
 -- 5. Update trigger for ai_provider_settings
 -- ═══════════════════════════════════════════════════════════════════════════════
@@ -162,7 +164,8 @@ BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = '';
 
 DROP TRIGGER IF EXISTS trigger_update_ai_provider_timestamp ON public.ai_provider_settings;
 CREATE TRIGGER trigger_update_ai_provider_timestamp
@@ -173,7 +176,12 @@ CREATE TRIGGER trigger_update_ai_provider_timestamp
 -- 6. View for admin dashboard
 -- ═══════════════════════════════════════════════════════════════════════════════
 
-CREATE OR REPLACE VIEW public.ai_provider_status AS
+-- Drop existing view first to recreate with security_invoker
+DROP VIEW IF EXISTS public.ai_provider_status;
+
+CREATE VIEW public.ai_provider_status
+WITH (security_invoker = true)
+AS
 SELECT
     provider,
     display_name,

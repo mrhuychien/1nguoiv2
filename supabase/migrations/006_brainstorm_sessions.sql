@@ -144,7 +144,8 @@ BEGIN
     NEW.updated_at = NOW();
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql
+SET search_path = '';
 
 DROP TRIGGER IF EXISTS trigger_update_brainstorm_session_timestamp ON public.brainstorm_sessions;
 CREATE TRIGGER trigger_update_brainstorm_session_timestamp
@@ -171,4 +172,5 @@ BEGIN
         last_used_at = NOW()
     WHERE provider = p_provider;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = '';
