@@ -292,6 +292,7 @@ function createTransformStream(
   let fullContent = ''
   let tokensInput = 0
   let tokensOutput = 0
+  let doneSent = false
 
   return new TransformStream({
     transform(chunk, controller) {
@@ -302,7 +303,10 @@ function createTransformStream(
         if (line.startsWith('data: ')) {
           const data = line.slice(6)
           if (data === '[DONE]') {
-            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+            if (!doneSent) {
+              doneSent = true
+              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+            }
             continue
           }
 
@@ -321,7 +325,8 @@ function createTransformStream(
               if (parsed.type === 'message_start' && parsed.message?.usage) {
                 tokensInput = parsed.message.usage.input_tokens || 0
               }
-              if (parsed.type === 'message_stop') {
+              if (parsed.type === 'message_stop' && !doneSent) {
+                doneSent = true
                 controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
               }
             } else if (provider === 'openai' || provider === 'xai') {
@@ -333,7 +338,8 @@ function createTransformStream(
                 tokensOutput = parsed.usage.completion_tokens || 0
               }
               // OpenAI/xAI signals end with finish_reason
-              if (parsed.choices?.[0]?.finish_reason === 'stop') {
+              if (parsed.choices?.[0]?.finish_reason === 'stop' && !doneSent) {
+                doneSent = true
                 controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
               }
             } else if (provider === 'google') {
@@ -345,7 +351,8 @@ function createTransformStream(
                 tokensOutput = parsed.usageMetadata.candidatesTokenCount || 0
               }
               // Google signals end with finishReason
-              if (parsed.candidates?.[0]?.finishReason === 'STOP') {
+              if (parsed.candidates?.[0]?.finishReason === 'STOP' && !doneSent) {
+                doneSent = true
                 controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
               }
             }
