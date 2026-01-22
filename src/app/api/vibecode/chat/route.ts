@@ -108,8 +108,38 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Return streaming response
-    return new Response(response.body, {
+    // Transform Anthropic streaming format to simple format for frontend
+    const transformStream = new TransformStream({
+      transform(chunk, controller) {
+        const text = new TextDecoder().decode(chunk)
+        const lines = text.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+
+              // Extract text from content_block_delta events
+              if (data.type === 'content_block_delta' && data.delta?.text) {
+                controller.enqueue(
+                  new TextEncoder().encode(`data: ${JSON.stringify({ content: data.delta.text })}\n\n`)
+                )
+              }
+
+              // Send [DONE] on message_stop
+              if (data.type === 'message_stop') {
+                controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+              }
+            } catch {
+              // Ignore parse errors
+            }
+          }
+        }
+      },
+    })
+
+    // Return transformed streaming response
+    return new Response(response.body?.pipeThrough(transformStream), {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
