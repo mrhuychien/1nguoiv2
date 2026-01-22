@@ -23,9 +23,11 @@ export function CombatMessage({ message, isStreaming }: CombatMessageProps) {
     return (
       <div className="flex justify-center">
         <div className="max-w-xl p-4 rounded-xl bg-slate-800/30 border border-slate-700/30 text-slate-400 text-sm">
-          <ReactMarkdown className="prose prose-invert prose-sm max-w-none">
-            {message.content}
-          </ReactMarkdown>
+          <div className="prose prose-invert prose-sm max-w-none">
+            <ReactMarkdown>
+              {message.content}
+            </ReactMarkdown>
+          </div>
         </div>
       </div>
     )
@@ -82,13 +84,11 @@ export function CombatMessage({ message, isStreaming }: CombatMessageProps) {
               isStreaming && 'animate-pulse'
             )}
           >
-            <ReactMarkdown
-              className="prose prose-invert prose-sm max-w-none
-                prose-p:my-2 prose-ul:my-2 prose-ol:my-2
-                prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2"
-            >
-              {message.content}
-            </ReactMarkdown>
+            <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5 prose-headings:mt-4 prose-headings:mb-2">
+              <ReactMarkdown>
+                {message.content}
+              </ReactMarkdown>
+            </div>
             {isStreaming && (
               <span className="inline-block w-2 h-4 bg-white/50 animate-pulse ml-1" />
             )}
