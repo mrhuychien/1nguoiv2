@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useBrainstormStore } from '@/store/brainstorm-store'
 import { AgentAvatar } from '@/components/brainstorm/agent-avatar'
@@ -17,6 +17,11 @@ import {
   Lightbulb,
   Target,
   TrendingUp,
+  FileText,
+  ChevronDown,
+  Coins,
+  Timer,
+  Hash,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -39,6 +44,9 @@ export default function BrainstormSessionPage() {
     ui,
     setActiveTab,
   } = useBrainstormStore()
+
+  const [selectedRoundNumber, setSelectedRoundNumber] = useState(1)
+  const [showRoundDropdown, setShowRoundDropdown] = useState(false)
 
   useEffect(() => {
     if (sessionId) {
@@ -218,6 +226,7 @@ export default function BrainstormSessionPage() {
                     { key: 'ideas', label: 'Ý tưởng', icon: Lightbulb },
                     { key: 'analysis', label: 'Phân tích', icon: TrendingUp },
                     { key: 'challenges', label: 'Thách thức', icon: AlertTriangle },
+                    { key: 'rounds', label: 'Chi tiết vòng', icon: FileText },
                   ].map((tab) => (
                     <button
                       key={tab.key}
@@ -348,6 +357,164 @@ export default function BrainstormSessionPage() {
                       {currentInsights.filter((i) => i.type === 'risk' || i.type === 'question').length === 0 && (
                         <p className="text-gray-400 text-center py-4">Chưa có thách thức nào</p>
                       )}
+                    </div>
+                  )}
+
+                  {ui.activeTab === 'rounds' && (
+                    <div className="space-y-4">
+                      {/* Round selector */}
+                      <div className="flex items-center justify-between">
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowRoundDropdown(!showRoundDropdown)}
+                            className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors"
+                          >
+                            {(() => {
+                              const selectedRound = currentRounds.find(r => r.round_number === selectedRoundNumber)
+                              const roundConfig = DEEP_MODE_ROUNDS.find(r => r.round_number === selectedRoundNumber)
+                              const agent = selectedRound?.agent_id ? AGENTS[selectedRound.agent_id] : null
+                              return (
+                                <>
+                                  {agent && <AgentAvatar agent={selectedRound!.agent_id} size="sm" />}
+                                  <span className="font-medium">
+                                    Vòng {selectedRoundNumber}: {roundConfig?.title || 'N/A'}
+                                  </span>
+                                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                                </>
+                              )
+                            })()}
+                          </button>
+                          {showRoundDropdown && (
+                            <>
+                              <div className="fixed inset-0 z-40" onClick={() => setShowRoundDropdown(false)} />
+                              <div className="absolute top-full left-0 mt-1 w-64 bg-gray-900 border border-white/10 rounded-lg shadow-xl z-50 py-1">
+                                {DEEP_MODE_ROUNDS.slice(0, currentSession?.total_rounds || 5).map((roundConfig) => {
+                                  const roundData = currentRounds.find(r => r.round_number === roundConfig.round_number)
+                                  const isCompleted = roundData?.status === 'completed'
+                                  return (
+                                    <button
+                                      key={roundConfig.round_number}
+                                      onClick={() => {
+                                        setSelectedRoundNumber(roundConfig.round_number)
+                                        setShowRoundDropdown(false)
+                                      }}
+                                      className={cn(
+                                        'w-full flex items-center gap-3 px-3 py-2 hover:bg-white/5 transition-colors',
+                                        selectedRoundNumber === roundConfig.round_number && 'bg-white/10'
+                                      )}
+                                    >
+                                      <AgentAvatar agent={roundConfig.agent} size="sm" />
+                                      <div className="flex-1 text-left">
+                                        <div className="font-medium text-sm">
+                                          Vòng {roundConfig.round_number}: {roundConfig.title}
+                                        </div>
+                                        <div className="text-xs text-gray-400">{roundConfig.description}</div>
+                                      </div>
+                                      {isCompleted && <Check className="w-4 h-4 text-green-400" />}
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Round output */}
+                      {(() => {
+                        const selectedRound = currentRounds.find(r => r.round_number === selectedRoundNumber)
+                        if (!selectedRound) {
+                          return (
+                            <div className="text-center py-8 text-gray-400">
+                              Chưa có dữ liệu cho vòng này
+                            </div>
+                          )
+                        }
+
+                        const agent = selectedRound.agent_id ? AGENTS[selectedRound.agent_id] : null
+
+                        return (
+                          <div className="space-y-4">
+                            {/* Agent info & stats */}
+                            <div className="flex flex-wrap items-center gap-4 p-4 bg-white/5 rounded-lg border border-white/10">
+                              {agent && (
+                                <div className="flex items-center gap-2">
+                                  <AgentAvatar agent={selectedRound.agent_id} size="md" />
+                                  <div>
+                                    <span className={cn('font-bold', agent.textColor)}>{agent.name}</span>
+                                    <p className="text-xs text-gray-400">{agent.provider}</p>
+                                  </div>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1 text-sm text-gray-400">
+                                <Hash className="w-4 h-4" />
+                                <span>{selectedRound.tokens_input + selectedRound.tokens_output} tokens</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-sm text-gray-400">
+                                <Coins className="w-4 h-4" />
+                                <span>${selectedRound.cost.toFixed(4)}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-sm text-gray-400">
+                                <Timer className="w-4 h-4" />
+                                <span>{(selectedRound.duration_ms / 1000).toFixed(1)}s</span>
+                              </div>
+                              <div className={cn(
+                                'px-2 py-0.5 rounded text-xs font-medium',
+                                selectedRound.status === 'completed' ? 'bg-green-500/20 text-green-400' :
+                                selectedRound.status === 'error' ? 'bg-red-500/20 text-red-400' :
+                                selectedRound.status === 'running' ? 'bg-cyan-500/20 text-cyan-400' :
+                                'bg-gray-500/20 text-gray-400'
+                              )}>
+                                {selectedRound.status === 'completed' ? 'Hoàn thành' :
+                                 selectedRound.status === 'error' ? 'Lỗi' :
+                                 selectedRound.status === 'running' ? 'Đang chạy' : 'Chờ'}
+                              </div>
+                            </div>
+
+                            {/* Error message if any */}
+                            {selectedRound.error && (
+                              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                                <div className="flex items-center gap-2 text-red-400 mb-2">
+                                  <AlertTriangle className="w-4 h-4" />
+                                  <span className="font-medium">Lỗi</span>
+                                </div>
+                                <p className="text-sm text-red-300">{selectedRound.error}</p>
+                              </div>
+                            )}
+
+                            {/* Full output */}
+                            {selectedRound.output && (
+                              <div className="p-4 bg-white/5 rounded-lg border border-white/10">
+                                <h4 className="font-medium text-white mb-3 flex items-center gap-2">
+                                  <FileText className="w-4 h-4" />
+                                  Phản hồi đầy đủ từ AI
+                                </h4>
+                                <div className="prose prose-invert prose-sm max-w-none">
+                                  <pre className="whitespace-pre-wrap text-sm text-gray-300 font-sans leading-relaxed bg-transparent p-0 m-0">
+                                    {selectedRound.output}
+                                  </pre>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Prompt used */}
+                            {selectedRound.prompt && (
+                              <details className="group">
+                                <summary className="cursor-pointer p-3 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors">
+                                  <span className="font-medium text-gray-400 text-sm">
+                                    Xem prompt đã gửi
+                                  </span>
+                                </summary>
+                                <div className="mt-2 p-4 bg-white/5 rounded-lg border border-white/10">
+                                  <pre className="whitespace-pre-wrap text-xs text-gray-400 font-mono">
+                                    {selectedRound.prompt}
+                                  </pre>
+                                </div>
+                              </details>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </div>
                   )}
                 </div>

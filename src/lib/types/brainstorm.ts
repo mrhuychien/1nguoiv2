@@ -282,7 +282,7 @@ export interface CreateSessionInput {
 
 // UI state for the brainstorm interface
 export interface BrainstormUIState {
-  activeTab: 'summary' | 'ideas' | 'analysis' | 'challenges'
+  activeTab: 'summary' | 'ideas' | 'analysis' | 'challenges' | 'rounds'
   selectedInsightId: string | null
   isPlaying: boolean
 }
