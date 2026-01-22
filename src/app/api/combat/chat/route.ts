@@ -111,8 +111,9 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text()
       console.error(`${agentConfig.provider} API error:`, response.status, errorText)
+      console.error(`Model: ${agentConfig.model}, Provider: ${agentConfig.provider}`)
       return new Response(JSON.stringify({
-        error: `${agentInfo.name} gặp lỗi khi xử lý`,
+        error: `${agentInfo.name} gặp lỗi khi xử lý (${response.status})`,
         details: errorText
       }), {
         status: 500,
