@@ -339,6 +339,10 @@ function createTransformStream(
                 tokensInput = parsed.usageMetadata.promptTokenCount || 0
                 tokensOutput = parsed.usageMetadata.candidatesTokenCount || 0
               }
+              // Google signals end with finishReason
+              if (parsed.candidates?.[0]?.finishReason === 'STOP') {
+                controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+              }
             }
 
             if (content) {
