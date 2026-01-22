@@ -60,6 +60,21 @@ export async function POST(request: NextRequest) {
       message
     )
 
+    // Check if API key is configured
+    if (!process.env.ANTHROPIC_API_KEY) {
+      console.error('ANTHROPIC_API_KEY is not configured')
+      return new Response(JSON.stringify({ error: 'AI service not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    console.log('Calling Claude API with', {
+      model: 'claude-sonnet-4-5-20250929',
+      messagesCount: apiMessages.length,
+      systemPromptLength: systemPrompt?.length,
+    })
+
     // Call Claude API (streaming)
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -78,9 +93,13 @@ export async function POST(request: NextRequest) {
     })
 
     if (!response.ok) {
-      const error = await response.text()
-      console.error('Claude API error:', error)
-      return new Response(JSON.stringify({ error: 'AI service error' }), {
+      const errorText = await response.text()
+      console.error('Claude API error:', response.status, response.statusText, errorText)
+      return new Response(JSON.stringify({
+        error: 'AI service error',
+        details: errorText,
+        status: response.status
+      }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -96,7 +115,11 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Chat API error:', error)
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return new Response(JSON.stringify({
+      error: 'Internal server error',
+      details: errorMessage
+    }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     })
