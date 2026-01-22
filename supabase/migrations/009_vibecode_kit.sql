@@ -154,7 +154,12 @@ CREATE TRIGGER trigger_update_vibecode_artifact_timestamp
 -- 5. Helper view for sessions with stats
 -- ═══════════════════════════════════════════════════════════════════════════════
 
-CREATE OR REPLACE VIEW public.vibecode_sessions_with_stats AS
+-- Drop existing view first to recreate with security_invoker
+DROP VIEW IF EXISTS public.vibecode_sessions_with_stats;
+
+CREATE VIEW public.vibecode_sessions_with_stats
+WITH (security_invoker = true)
+AS
 SELECT
     vs.*,
     COUNT(DISTINCT va.id) AS total_artifacts,

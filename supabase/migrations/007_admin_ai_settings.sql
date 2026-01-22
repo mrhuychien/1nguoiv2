@@ -173,7 +173,12 @@ CREATE TRIGGER trigger_update_ai_provider_timestamp
 -- 6. View for admin dashboard
 -- ═══════════════════════════════════════════════════════════════════════════════
 
-CREATE OR REPLACE VIEW public.ai_provider_status AS
+-- Drop existing view first to recreate with security_invoker
+DROP VIEW IF EXISTS public.ai_provider_status;
+
+CREATE VIEW public.ai_provider_status
+WITH (security_invoker = true)
+AS
 SELECT
     provider,
     display_name,
