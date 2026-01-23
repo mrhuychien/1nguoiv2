@@ -5,9 +5,10 @@ import { useCombatFreeStore } from '@/lib/stores/combatfree-store'
 import { FREE_AGENTS } from '@/lib/types/combatfree'
 import type { FreeAgentId } from '@/lib/types/combatfree'
 import { CombatFreeMessage } from './combatfree-message'
+import { CombatFreeSidebar } from './combatfree-sidebar'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Send, Loader2, Trash2 } from 'lucide-react'
+import { Send, Loader2, Trash2, Menu, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const AGENTS_LIST: FreeAgentId[] = ['spark', 'lens', 'radar', 'devil']
@@ -20,6 +21,7 @@ export function CombatFreeRoom() {
   const [showMentionDropdown, setShowMentionDropdown] = useState(false)
   const [mentionFilter, setMentionFilter] = useState('')
   const [mentionIndex, setMentionIndex] = useState(0)
+  const [showSidebar, setShowSidebar] = useState(false)
 
   const {
     messages,
@@ -27,10 +29,15 @@ export function CombatFreeRoom() {
     streamingContent,
     streamingAgent,
     error,
+    currentSessionId,
+    sessions,
     sendMessage,
     clearMessages,
     setError,
+    createSession,
   } = useCombatFreeStore()
+
+  const currentSession = sessions.find((s) => s.id === currentSessionId)
 
   // Auto-scroll
   useEffect(() => {
@@ -123,35 +130,67 @@ export function CombatFreeRoom() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
-      {/* Header */}
-      <div className="border-b border-slate-700/50 px-4 py-3 flex items-center justify-between bg-slate-900/80 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center text-lg">
-            🆓
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex">
+      {/* Sidebar */}
+      <CombatFreeSidebar isOpen={showSidebar} onClose={() => setShowSidebar(false)} />
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <div className="border-b border-slate-700/50 px-4 py-3 flex items-center justify-between bg-slate-900/80 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowSidebar(true)}
+              className="text-slate-400 hover:text-white"
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center text-lg">
+              🆓
+            </div>
+            <div>
+              <h1 className="font-semibold text-white flex items-center gap-2">
+                {currentSession ? currentSession.title : 'Combat Free'}
+                <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
+                  {currentSession ? (currentSession.status === 'active' ? 'Đang họp' : 'Đã kết thúc') : '4 AI Miễn phí'}
+                </span>
+              </h1>
+              <p className="text-sm text-slate-400">
+                {currentSession?.topic || 'Hội đồng 4 AI - Hoàn toàn miễn phí'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-semibold text-white flex items-center gap-2">
-              Combat Free
-              <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
-                4 AI Miễn phí
-              </span>
-            </h1>
-            <p className="text-sm text-slate-400">
-              Hội đồng 4 AI - Hoàn toàn miễn phí
-            </p>
+
+          <div className="flex items-center gap-2">
+            {!currentSession && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const title = prompt('Tiêu đề cuộc họp:')
+                  if (title) {
+                    const topic = prompt('Chủ đề (tùy chọn):')
+                    createSession(title, topic || undefined)
+                  }
+                }}
+                className="text-green-400 hover:text-green-300 hover:bg-green-500/10"
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Tạo cuộc họp
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={clearMessages}
+              className="text-slate-400 hover:text-white"
+            >
+              <Trash2 className="w-5 h-5" />
+            </Button>
           </div>
         </div>
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={clearMessages}
-          className="text-slate-400 hover:text-white"
-        >
-          <Trash2 className="w-5 h-5" />
-        </Button>
-      </div>
 
       {/* Agent selector bar */}
       <div className="border-b border-slate-700/50 px-4 py-3 bg-slate-900/50">
@@ -188,12 +227,12 @@ export function CombatFreeRoom() {
             <div className="max-w-xl p-6 rounded-xl bg-slate-800/30 border border-slate-700/30 text-center">
               <div className="text-4xl mb-4">🆓</div>
               <h2 className="text-xl font-semibold text-white mb-2">
-                Combat Free - Hội đồng 4 AI Miễn phí
+                {currentSession ? currentSession.title : 'Combat Free - Hội đồng 4 AI Miễn phí'}
               </h2>
               <p className="text-slate-400 mb-4">
-                Chat với 4 AI agents hoàn toàn miễn phí!
+                {currentSession?.topic || 'Chat với 4 AI agents hoàn toàn miễn phí!'}
               </p>
-              <div className="flex justify-center gap-4 flex-wrap">
+              <div className="flex justify-center gap-4 flex-wrap mb-4">
                 {AGENTS_LIST.map((agentId) => {
                   const agent = FREE_AGENTS[agentId]
                   return (
@@ -206,6 +245,26 @@ export function CombatFreeRoom() {
                   )
                 })}
               </div>
+              {!currentSession && (
+                <div className="pt-4 border-t border-slate-700/30">
+                  <p className="text-sm text-slate-500 mb-3">
+                    Tạo cuộc họp để lưu lại nội dung trao đổi
+                  </p>
+                  <Button
+                    onClick={() => {
+                      const title = prompt('Tiêu đề cuộc họp:')
+                      if (title) {
+                        const topic = prompt('Chủ đề (tùy chọn):')
+                        createSession(title, topic || undefined)
+                      }
+                    }}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Tạo cuộc họp mới
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -334,6 +393,7 @@ export function CombatFreeRoom() {
           </Button>
         </div>
       </div>
+      </div> {/* End Main Content */}
     </div>
   )
 }

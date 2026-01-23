@@ -4,6 +4,16 @@
 
 export type FreeAgentId = 'spark' | 'lens' | 'radar' | 'devil'
 
+export interface CombatFreeSession {
+  id: string
+  title: string
+  topic?: string
+  status: 'active' | 'ended'
+  messages: CombatFreeMessage[]
+  created_at: string
+  updated_at: string
+}
+
 export interface CombatFreeMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
