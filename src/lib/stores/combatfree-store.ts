@@ -46,7 +46,8 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
       checkServerStatus: async () => {
         const { config } = get()
         try {
-          const response = await fetch(`${config.serverUrl}/health`, {
+          // gpt4free uses /v1/providers endpoint, not /health
+          const response = await fetch(`${config.serverUrl}/v1/providers`, {
             method: 'GET',
             signal: AbortSignal.timeout(5000),
           })
@@ -159,6 +160,19 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
         config: state.config,
         messages: state.messages.slice(-50), // Keep last 50 messages
       }),
+      // Merge persisted config with defaults to pick up new serverUrl
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as Partial<CombatFreeStore>
+        return {
+          ...currentState,
+          ...persisted,
+          config: {
+            ...DEFAULT_CONFIG, // Use defaults first (new port)
+            ...persisted.config, // Then overlay user preferences
+            serverUrl: DEFAULT_CONFIG.serverUrl, // Always use latest default serverUrl
+          },
+        }
+      },
     }
   )
 )
