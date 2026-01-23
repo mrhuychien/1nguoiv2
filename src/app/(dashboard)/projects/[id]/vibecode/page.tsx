@@ -2,7 +2,9 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { useUser } from '@/hooks/use-user'
+import { useSubscription } from '@/hooks/use-subscription'
 import { VibeCodeWizard } from '@/components/vibecode'
+import { ProFeatureGate } from '@/components/ui/upgrade-prompt'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import Link from 'next/link'
@@ -11,6 +13,7 @@ export default function VibeCodePage() {
   const params = useParams()
   const router = useRouter()
   const { user, isLoading } = useUser()
+  const { isPro, isLoading: subscriptionLoading } = useSubscription()
 
   const projectId = params.id as string
 
@@ -31,29 +34,36 @@ export default function VibeCodePage() {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col">
-      {/* Header */}
-      <div className="border-b border-white/10 px-6 py-4 flex items-center gap-4">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href={`/projects/${projectId}`}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Quay lại
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-xl font-semibold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
-            Vibecode Kit
-          </h1>
-          <p className="text-xs text-gray-400">
-            AI-powered product design wizard
-          </p>
+    <ProFeatureGate
+      isPro={isPro}
+      isLoading={subscriptionLoading}
+      feature="Vibecode Kit"
+      description="AI-powered product design wizard giúp bạn thiết kế sản phẩm từ ý tưởng đến blueprint."
+    >
+      <div className="h-[calc(100vh-64px)] flex flex-col">
+        {/* Header */}
+        <div className="border-b border-white/10 px-6 py-4 flex items-center gap-4">
+          <Button variant="ghost" size="sm" asChild>
+            <Link href={`/projects/${projectId}`}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Quay lại
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-xl font-semibold bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent">
+              Vibecode Kit
+            </h1>
+            <p className="text-xs text-gray-400">
+              AI-powered product design wizard
+            </p>
+          </div>
+        </div>
+
+        {/* Wizard */}
+        <div className="flex-1 overflow-hidden">
+          <VibeCodeWizard projectId={projectId} userId={user.id} />
         </div>
       </div>
-
-      {/* Wizard */}
-      <div className="flex-1 overflow-hidden">
-        <VibeCodeWizard projectId={projectId} userId={user.id} />
-      </div>
-    </div>
+    </ProFeatureGate>
   )
 }

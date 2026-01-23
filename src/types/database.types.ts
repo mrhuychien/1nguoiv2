@@ -16,6 +16,7 @@ export interface Database {
           full_name: string | null
           avatar_url: string | null
           role: 'user' | 'admin' | 'super_admin'
+          subscription: 'free' | 'pro'
           created_at: string
           updated_at: string
         }
@@ -25,6 +26,7 @@ export interface Database {
           full_name?: string | null
           avatar_url?: string | null
           role?: 'user' | 'admin' | 'super_admin'
+          subscription?: 'free' | 'pro'
           created_at?: string
           updated_at?: string
         }
@@ -34,6 +36,7 @@ export interface Database {
           full_name?: string | null
           avatar_url?: string | null
           role?: 'user' | 'admin' | 'super_admin'
+          subscription?: 'free' | 'pro'
           created_at?: string
           updated_at?: string
         }
@@ -490,3 +493,4 @@ export type AIUsageLog = Database['public']['Tables']['ai_usage_logs']['Row']
 export type AIUsageLogInsert = Database['public']['Tables']['ai_usage_logs']['Insert']
 export type AIProvider = 'openai' | 'anthropic' | 'google' | 'xai'
 export type UserRole = 'user' | 'admin' | 'super_admin'
+export type Subscription = 'free' | 'pro'
