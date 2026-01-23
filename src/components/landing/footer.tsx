@@ -93,7 +93,15 @@ export function Footer() {
               </a>
             </p>
             <p className="text-text-secondary text-sm">
-              Created by <span className="font-medium">Nguyễn Huy Chiến</span>
+              Created by{" "}
+              <a
+                href="https://www.facebook.com/mrhuychien"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-cyan hover:underline"
+              >
+                Nguyễn Huy Chiến
+              </a>
             </p>
             <p className="text-text-muted text-xs mt-4">
               &copy; {year} 1nguoi.com. All rights reserved.

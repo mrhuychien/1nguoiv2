@@ -11,7 +11,7 @@ import type { User } from "@supabase/supabase-js";
 const navLinks = [
   { href: "#pillars", label: "Tính năng" },
   { href: "#tools", label: "Công cụ" },
-  { href: "/combatfree", label: "🆓 AI Free", isPage: true },
+  { href: "/combatfree", label: "Combat", isPage: true },
   { href: "#pricing", label: "Bảng giá" },
   { href: "#faq", label: "FAQ" },
 ];

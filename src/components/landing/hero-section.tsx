@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, LayoutDashboard } from "lucide-react";
+import { ArrowRight, LayoutDashboard, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
@@ -76,12 +76,20 @@ export function HeroSection() {
                 </Link>
               </Button>
             ) : (
-              <Button size="xl" asChild>
-                <Link href="/signup">
-                  Bắt đầu miễn phí
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
+              <>
+                <Button size="xl" asChild>
+                  <Link href="/signup">
+                    Bắt đầu miễn phí
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </Link>
+                </Button>
+                <Button size="xl" variant="outline" asChild>
+                  <Link href="/demo">
+                    <Play className="mr-2 h-5 w-5" />
+                    Xem Demo
+                  </Link>
+                </Button>
+              </>
             )}
           </motion.div>
 
