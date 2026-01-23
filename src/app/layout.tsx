@@ -28,17 +28,19 @@ export const metadata: Metadata = {
   },
 };
 
-// Script to prevent theme flash
+// Script to prevent theme flash - default to dark
 const themeScript = `
   (function() {
     try {
       var theme = localStorage.getItem('1nguoi-theme');
       if (!theme) {
-        theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        theme = 'dark';
       }
       document.documentElement.setAttribute('data-theme', theme);
       document.documentElement.classList.add('no-transitions');
-    } catch (e) {}
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
   })();
 `;
 
@@ -48,7 +50,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi" suppressHydrationWarning>
+    <html lang="vi" data-theme="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

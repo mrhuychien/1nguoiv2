@@ -18,7 +18,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>("dark");
   const [isMounted, setIsMounted] = useState(false);
 
-  // Initialize theme from localStorage or system preference
+  // Initialize theme from localStorage (default to dark)
   useEffect(() => {
     setIsMounted(true);
 
@@ -29,11 +29,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setThemeState(storedTheme);
       document.documentElement.setAttribute("data-theme", storedTheme);
     } else {
-      // Check system preference
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      const systemTheme: Theme = prefersDark ? "dark" : "light";
-      setThemeState(systemTheme);
-      document.documentElement.setAttribute("data-theme", systemTheme);
+      // Default to dark mode (not system preference)
+      setThemeState("dark");
+      document.documentElement.setAttribute("data-theme", "dark");
     }
 
     // Remove no-transitions class after initial load
