@@ -6,6 +6,8 @@ import {
   Phase3Section,
   ToolsSection,
   AICouncilSection,
+  PricingSection,
+  FAQSection,
   CTASection,
   Footer,
 } from "@/components/landing";
@@ -20,6 +22,8 @@ export default function HomePage() {
       <Phase3Section />
       <ToolsSection />
       <AICouncilSection />
+      <PricingSection />
+      <FAQSection />
       <CTASection />
       <Footer />
     </main>
