@@ -30,9 +30,10 @@ export async function POST(request: NextRequest) {
     let useGpt4free = false
 
     try {
-      response = await callWebAIServer(config.serverUrl, messages, config.model)
+      response = await callWebAIServer(config.serverUrl, messages, config.model, config.provider)
       if (!response.ok) {
-        console.log('WebAI server returned error, trying gpt4free...')
+        const errorText = await response.text()
+        console.log('WebAI server returned error:', errorText)
         useGpt4free = true
       }
     } catch (error) {
@@ -78,19 +79,23 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Call WebAI-to-API server
+// Call WebAI-to-API server (gpt4free mode)
 async function callWebAIServer(
   serverUrl: string,
   messages: Array<{ role: string; content: string }>,
-  model: string
+  model: string,
+  provider: string
 ): Promise<Response> {
+  // gpt4free requires provider name, not model name
+  const g4fProvider = GPT4FREE_PROVIDERS[provider] || 'Gemini'
+
   return fetch(`${serverUrl}/v1/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model,
+      model: g4fProvider, // gpt4free uses provider as model
       messages,
       stream: true,
     }),

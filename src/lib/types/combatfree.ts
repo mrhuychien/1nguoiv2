@@ -67,7 +67,7 @@ export const FREE_PROVIDERS: Record<FreeProvider, {
 }
 
 export const DEFAULT_CONFIG: CombatFreeConfig = {
-  serverUrl: 'http://localhost:8000',
+  serverUrl: 'http://localhost:6969',
   provider: 'gemini',
   model: 'gemini-2.5-flash',
 }
