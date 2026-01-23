@@ -217,6 +217,7 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
 
       const decoder = new TextDecoder()
       let fullContent = ''
+      let messageSaved = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -230,23 +231,26 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
             const data = line.slice(6)
             if (data === '[DONE]') {
               // Add AI message to state
-              const aiMessage: CombatMessage = {
-                id: `ai-${Date.now()}`,
-                session_id: session.id,
-                role: targetAgent as CombatRole,
-                content: fullContent,
-                mentioned_agents: [],
-                tokens_input: 0,
-                tokens_output: 0,
-                cost: 0,
-                duration_ms: 0,
-                created_at: new Date().toISOString(),
+              if (!messageSaved && fullContent) {
+                messageSaved = true
+                const aiMessage: CombatMessage = {
+                  id: `ai-${Date.now()}`,
+                  session_id: session.id,
+                  role: targetAgent as CombatRole,
+                  content: fullContent,
+                  mentioned_agents: [],
+                  tokens_input: 0,
+                  tokens_output: 0,
+                  cost: 0,
+                  duration_ms: 0,
+                  created_at: new Date().toISOString(),
+                }
+                set((state) => ({
+                  messages: [...state.messages, aiMessage],
+                  streamingContent: '',
+                  streamingAgent: null,
+                }))
               }
-              set((state) => ({
-                messages: [...state.messages, aiMessage],
-                streamingContent: '',
-                streamingAgent: null,
-              }))
             } else {
               try {
                 const parsed = JSON.parse(data)
@@ -260,6 +264,27 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
             }
           }
         }
+      }
+
+      // Save message if stream ended without [DONE]
+      if (!messageSaved && fullContent) {
+        const aiMessage: CombatMessage = {
+          id: `ai-${Date.now()}`,
+          session_id: session.id,
+          role: targetAgent as CombatRole,
+          content: fullContent,
+          mentioned_agents: [],
+          tokens_input: 0,
+          tokens_output: 0,
+          cost: 0,
+          duration_ms: 0,
+          created_at: new Date().toISOString(),
+        }
+        set((state) => ({
+          messages: [...state.messages, aiMessage],
+          streamingContent: '',
+          streamingAgent: null,
+        }))
       }
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Unknown error' })
@@ -319,6 +344,7 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
 
         const decoder = new TextDecoder()
         let fullContent = ''
+        let messageSaved = false
 
         while (true) {
           const { done, value } = await reader.read()
@@ -332,23 +358,26 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
               const data = line.slice(6)
               if (data === '[DONE]') {
                 // Add AI message to state
-                const aiMessage: CombatMessage = {
-                  id: `ai-${targetAgent}-${Date.now()}`,
-                  session_id: session.id,
-                  role: targetAgent as CombatRole,
-                  content: fullContent,
-                  mentioned_agents: [],
-                  tokens_input: 0,
-                  tokens_output: 0,
-                  cost: 0,
-                  duration_ms: 0,
-                  created_at: new Date().toISOString(),
+                if (!messageSaved && fullContent) {
+                  messageSaved = true
+                  const aiMessage: CombatMessage = {
+                    id: `ai-${targetAgent}-${Date.now()}`,
+                    session_id: session.id,
+                    role: targetAgent as CombatRole,
+                    content: fullContent,
+                    mentioned_agents: [],
+                    tokens_input: 0,
+                    tokens_output: 0,
+                    cost: 0,
+                    duration_ms: 0,
+                    created_at: new Date().toISOString(),
+                  }
+                  set((state) => ({
+                    messages: [...state.messages, aiMessage],
+                    streamingContent: '',
+                    streamingAgent: null,
+                  }))
                 }
-                set((state) => ({
-                  messages: [...state.messages, aiMessage],
-                  streamingContent: '',
-                  streamingAgent: null,
-                }))
               } else {
                 try {
                   const parsed = JSON.parse(data)
@@ -362,6 +391,27 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
               }
             }
           }
+        }
+
+        // Save message if stream ended without [DONE]
+        if (!messageSaved && fullContent) {
+          const aiMessage: CombatMessage = {
+            id: `ai-${targetAgent}-${Date.now()}`,
+            session_id: session.id,
+            role: targetAgent as CombatRole,
+            content: fullContent,
+            mentioned_agents: [],
+            tokens_input: 0,
+            tokens_output: 0,
+            cost: 0,
+            duration_ms: 0,
+            created_at: new Date().toISOString(),
+          }
+          set((state) => ({
+            messages: [...state.messages, aiMessage],
+            streamingContent: '',
+            streamingAgent: null,
+          }))
         }
       } catch (error) {
         set({ error: error instanceof Error ? error.message : 'Unknown error' })

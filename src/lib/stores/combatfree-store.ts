@@ -165,6 +165,7 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
 
           const decoder = new TextDecoder()
           let fullContent = ''
+          let messageSaved = false
 
           while (true) {
             const { done, value } = await reader.read()
@@ -178,30 +179,33 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
                 const data = line.slice(6)
                 if (data === '[DONE]') {
                   // Add AI message
-                  const aiMessage: CombatFreeMessage = {
-                    id: `ai-${Date.now()}`,
-                    role: 'assistant',
-                    agent: targetAgent,
-                    content: fullContent,
-                    created_at: new Date().toISOString(),
-                  }
-                  set((state) => {
-                    const newMessages = [...state.messages, aiMessage]
-                    // Also update session if one is active
-                    const updatedSessions = state.currentSessionId
-                      ? state.sessions.map((s) =>
-                          s.id === state.currentSessionId
-                            ? { ...s, messages: newMessages, updated_at: new Date().toISOString() }
-                            : s
-                        )
-                      : state.sessions
-                    return {
-                      messages: newMessages,
-                      sessions: updatedSessions,
-                      streamingContent: '',
-                      streamingAgent: null,
+                  if (!messageSaved && fullContent) {
+                    messageSaved = true
+                    const aiMessage: CombatFreeMessage = {
+                      id: `ai-${Date.now()}`,
+                      role: 'assistant',
+                      agent: targetAgent,
+                      content: fullContent,
+                      created_at: new Date().toISOString(),
                     }
-                  })
+                    set((state) => {
+                      const newMessages = [...state.messages, aiMessage]
+                      // Also update session if one is active
+                      const updatedSessions = state.currentSessionId
+                        ? state.sessions.map((s) =>
+                            s.id === state.currentSessionId
+                              ? { ...s, messages: newMessages, updated_at: new Date().toISOString() }
+                              : s
+                          )
+                        : state.sessions
+                      return {
+                        messages: newMessages,
+                        sessions: updatedSessions,
+                        streamingContent: '',
+                        streamingAgent: null,
+                      }
+                    })
+                  }
                 } else {
                   try {
                     const parsed = JSON.parse(data)
@@ -215,6 +219,33 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
                 }
               }
             }
+          }
+
+          // Save message if stream ended without [DONE]
+          if (!messageSaved && fullContent) {
+            const aiMessage: CombatFreeMessage = {
+              id: `ai-${Date.now()}`,
+              role: 'assistant',
+              agent: targetAgent,
+              content: fullContent,
+              created_at: new Date().toISOString(),
+            }
+            set((state) => {
+              const newMessages = [...state.messages, aiMessage]
+              const updatedSessions = state.currentSessionId
+                ? state.sessions.map((s) =>
+                    s.id === state.currentSessionId
+                      ? { ...s, messages: newMessages, updated_at: new Date().toISOString() }
+                      : s
+                  )
+                : state.sessions
+              return {
+                messages: newMessages,
+                sessions: updatedSessions,
+                streamingContent: '',
+                streamingAgent: null,
+              }
+            })
           }
         } catch (error) {
           set({ error: error instanceof Error ? error.message : 'Unknown error' })
@@ -288,6 +319,7 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
 
             const decoder = new TextDecoder()
             let fullContent = ''
+            let messageSaved = false
 
             while (true) {
               const { done, value } = await reader.read()
@@ -301,29 +333,32 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
                   const data = line.slice(6)
                   if (data === '[DONE]') {
                     // Add AI message
-                    const aiMessage: CombatFreeMessage = {
-                      id: `ai-${targetAgent}-${Date.now()}`,
-                      role: 'assistant',
-                      agent: targetAgent,
-                      content: fullContent,
-                      created_at: new Date().toISOString(),
-                    }
-                    set((state) => {
-                      const newMessages = [...state.messages, aiMessage]
-                      const updatedSessions = state.currentSessionId
-                        ? state.sessions.map((s) =>
-                            s.id === state.currentSessionId
-                              ? { ...s, messages: newMessages, updated_at: new Date().toISOString() }
-                              : s
-                          )
-                        : state.sessions
-                      return {
-                        messages: newMessages,
-                        sessions: updatedSessions,
-                        streamingContent: '',
-                        streamingAgent: null,
+                    if (!messageSaved && fullContent) {
+                      messageSaved = true
+                      const aiMessage: CombatFreeMessage = {
+                        id: `ai-${targetAgent}-${Date.now()}`,
+                        role: 'assistant',
+                        agent: targetAgent,
+                        content: fullContent,
+                        created_at: new Date().toISOString(),
                       }
-                    })
+                      set((state) => {
+                        const newMessages = [...state.messages, aiMessage]
+                        const updatedSessions = state.currentSessionId
+                          ? state.sessions.map((s) =>
+                              s.id === state.currentSessionId
+                                ? { ...s, messages: newMessages, updated_at: new Date().toISOString() }
+                                : s
+                            )
+                          : state.sessions
+                        return {
+                          messages: newMessages,
+                          sessions: updatedSessions,
+                          streamingContent: '',
+                          streamingAgent: null,
+                        }
+                      })
+                    }
                   } else {
                     try {
                       const parsed = JSON.parse(data)
@@ -337,6 +372,33 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
                   }
                 }
               }
+            }
+
+            // Save message if stream ended without [DONE]
+            if (!messageSaved && fullContent) {
+              const aiMessage: CombatFreeMessage = {
+                id: `ai-${targetAgent}-${Date.now()}`,
+                role: 'assistant',
+                agent: targetAgent,
+                content: fullContent,
+                created_at: new Date().toISOString(),
+              }
+              set((state) => {
+                const newMessages = [...state.messages, aiMessage]
+                const updatedSessions = state.currentSessionId
+                  ? state.sessions.map((s) =>
+                      s.id === state.currentSessionId
+                        ? { ...s, messages: newMessages, updated_at: new Date().toISOString() }
+                        : s
+                    )
+                  : state.sessions
+                return {
+                  messages: newMessages,
+                  sessions: updatedSessions,
+                  streamingContent: '',
+                  streamingAgent: null,
+                }
+              })
             }
           } catch (error) {
             set({ error: error instanceof Error ? error.message : 'Unknown error' })
