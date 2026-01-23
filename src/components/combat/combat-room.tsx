@@ -30,9 +30,24 @@ export function CombatRoom() {
     streamingAgent,
     error,
     sendMessage,
+    sendMessageToAgents,
     endSession,
     reset,
   } = useCombatStore()
+
+  // Extract mentioned agents from message
+  const extractMentionedAgents = useCallback((text: string): AgentId[] => {
+    const mentionedAgents: AgentId[] = []
+    for (const agentId of AGENTS_LIST) {
+      const agentName = COMBAT_AGENTS[agentId].name
+      // Check for @AgentName pattern (case insensitive)
+      const regex = new RegExp(`@${agentName}\\b`, 'i')
+      if (regex.test(text)) {
+        mentionedAgents.push(agentId)
+      }
+    }
+    return mentionedAgents
+  }, [])
 
   // Auto-scroll
   useEffect(() => {
@@ -90,12 +105,37 @@ export function CombatRoom() {
   }, [inputMessage])
 
   const handleSend = async () => {
-    if (!selectedAgent || !inputMessage.trim() || isSending) return
+    if (!inputMessage.trim() || isSending) return
 
     const message = inputMessage.trim()
+
+    // Extract all mentioned agents from the message
+    const mentionedAgents = extractMentionedAgents(message)
+
+    // Determine which agents should respond
+    let targetAgents: AgentId[] = []
+
+    if (mentionedAgents.length > 0) {
+      // If there are mentions, use them
+      targetAgents = mentionedAgents
+    } else if (selectedAgent) {
+      // Otherwise use the selected agent
+      targetAgents = [selectedAgent]
+    } else {
+      // No agent selected or mentioned
+      return
+    }
+
     setInputMessage('')
     setShowMentionDropdown(false)
-    await sendMessage(selectedAgent, message)
+
+    if (targetAgents.length === 1) {
+      // Single agent - use regular sendMessage
+      await sendMessage(targetAgents[0], message)
+    } else {
+      // Multiple agents - use sendMessageToAgents
+      await sendMessageToAgents(targetAgents, message)
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -268,8 +308,8 @@ export function CombatRoom() {
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder={selectedAgent
-                ? `Nói với ${COMBAT_AGENTS[selectedAgent].name}... (gõ @ để mention AI khác)`
-                : 'Gõ @ để chọn AI và bắt đầu cuộc hội thoại...'
+                ? `Nói với ${COMBAT_AGENTS[selectedAgent].name}... (gõ @Spark @Lens để hỏi nhiều AI)`
+                : 'Gõ @ để mention AI (VD: @Spark @Lens cho nhiều AI trả lời)'
               }
               className="bg-slate-800 border-slate-700 text-white resize-none pr-12 min-h-[48px] max-h-32"
               rows={1}
@@ -315,12 +355,14 @@ export function CombatRoom() {
           </div>
           <Button
             onClick={handleSend}
-            disabled={!selectedAgent || !inputMessage.trim() || isSending}
+            disabled={(!selectedAgent && extractMentionedAgents(inputMessage).length === 0) || !inputMessage.trim() || isSending}
             className={cn(
               'px-4',
               selectedAgent
                 ? `bg-gradient-to-r ${COMBAT_AGENTS[selectedAgent].color} hover:opacity-90`
-                : 'bg-slate-700 hover:bg-slate-600'
+                : extractMentionedAgents(inputMessage).length > 0
+                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90'
+                  : 'bg-slate-700 hover:bg-slate-600'
             )}
           >
             {isSending ? (

@@ -23,6 +23,7 @@ interface CombatFreeStore {
 
   // Message Actions
   sendMessage: (targetAgent: FreeAgentId, content: string) => Promise<void>
+  sendMessageToAgents: (targetAgents: FreeAgentId[], content: string) => Promise<void>
   clearMessages: () => void
   setError: (error: string | null) => void
   reset: () => void
@@ -220,6 +221,130 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
         } finally {
           set({ isSending: false, streamingAgent: null })
         }
+      },
+
+      // Send message to multiple agents sequentially
+      sendMessageToAgents: async (targetAgents: FreeAgentId[], content: string) => {
+        const { messages } = get()
+
+        if (get().isSending) return
+        if (targetAgents.length === 0) return
+
+        // Add user message first
+        const userMessage: CombatFreeMessage = {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          content,
+          created_at: new Date().toISOString(),
+        }
+
+        set((state) => {
+          const newMessages = [...messages, userMessage]
+          const updatedSessions = state.currentSessionId
+            ? state.sessions.map((s) =>
+                s.id === state.currentSessionId
+                  ? { ...s, messages: newMessages, updated_at: new Date().toISOString() }
+                  : s
+              )
+            : state.sessions
+          return {
+            messages: newMessages,
+            sessions: updatedSessions,
+          }
+        })
+
+        // Call each agent sequentially
+        for (const targetAgent of targetAgents) {
+          set({
+            isSending: true,
+            error: null,
+            streamingContent: '',
+            streamingAgent: targetAgent,
+          })
+
+          try {
+            const currentMessages = get().messages
+            const response = await fetch('/api/combatfree/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                messages: currentMessages.map((m) => ({
+                  role: m.role,
+                  content: m.role === 'assistant' && m.agent
+                    ? `[${FREE_AGENTS[m.agent].emoji} ${FREE_AGENTS[m.agent].name}]: ${m.content}`
+                    : m.content,
+                })),
+                targetAgent,
+              }),
+            })
+
+            if (!response.ok) {
+              const error = await response.json()
+              throw new Error(error.error || 'Failed to send message')
+            }
+
+            const reader = response.body?.getReader()
+            if (!reader) throw new Error('No response body')
+
+            const decoder = new TextDecoder()
+            let fullContent = ''
+
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+
+              const chunk = decoder.decode(value)
+              const lines = chunk.split('\n')
+
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6)
+                  if (data === '[DONE]') {
+                    // Add AI message
+                    const aiMessage: CombatFreeMessage = {
+                      id: `ai-${targetAgent}-${Date.now()}`,
+                      role: 'assistant',
+                      agent: targetAgent,
+                      content: fullContent,
+                      created_at: new Date().toISOString(),
+                    }
+                    set((state) => {
+                      const newMessages = [...state.messages, aiMessage]
+                      const updatedSessions = state.currentSessionId
+                        ? state.sessions.map((s) =>
+                            s.id === state.currentSessionId
+                              ? { ...s, messages: newMessages, updated_at: new Date().toISOString() }
+                              : s
+                          )
+                        : state.sessions
+                      return {
+                        messages: newMessages,
+                        sessions: updatedSessions,
+                        streamingContent: '',
+                        streamingAgent: null,
+                      }
+                    })
+                  } else {
+                    try {
+                      const parsed = JSON.parse(data)
+                      if (parsed.content) {
+                        fullContent += parsed.content
+                        set({ streamingContent: fullContent })
+                      }
+                    } catch {
+                      // Ignore parse errors
+                    }
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            set({ error: error instanceof Error ? error.message : 'Unknown error' })
+            break // Stop on error
+          }
+        }
+
+        set({ isSending: false, streamingAgent: null })
       },
 
       clearMessages: () => {

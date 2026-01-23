@@ -23,6 +23,7 @@ interface CombatStore {
   // Message actions
   loadMessages: () => Promise<void>
   sendMessage: (targetAgent: AgentId, content: string) => Promise<void>
+  sendMessageToAgents: (targetAgents: AgentId[], content: string) => Promise<void>
 
   // UI actions
   setStreamingContent: (content: string) => void
@@ -265,6 +266,110 @@ export const useCombatStore = create<CombatStore>((set, get) => ({
     } finally {
       set({ isSending: false, streamingAgent: null })
     }
+  },
+
+  // Send message to multiple agents sequentially
+  sendMessageToAgents: async (targetAgents: AgentId[], content: string) => {
+    const { session, messages } = get()
+    if (!session || get().isSending) return
+    if (targetAgents.length === 0) return
+
+    // Add user message first
+    const userMessage: CombatMessage = {
+      id: `temp-${Date.now()}`,
+      session_id: session.id,
+      role: 'user' as CombatRole,
+      content,
+      mentioned_agents: targetAgents,
+      tokens_input: 0,
+      tokens_output: 0,
+      cost: 0,
+      duration_ms: 0,
+      created_at: new Date().toISOString(),
+    }
+    set({ messages: [...messages, userMessage] })
+
+    // Call each agent sequentially
+    for (const targetAgent of targetAgents) {
+      set({
+        isSending: true,
+        error: null,
+        streamingContent: '',
+        streamingAgent: targetAgent,
+      })
+
+      try {
+        const response = await fetch('/api/combat/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: session.id,
+            target_agent: targetAgent,
+            message: content,
+          }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to send message')
+        }
+
+        const reader = response.body?.getReader()
+        if (!reader) throw new Error('No response body')
+
+        const decoder = new TextDecoder()
+        let fullContent = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value)
+          const lines = chunk.split('\n')
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6)
+              if (data === '[DONE]') {
+                // Add AI message to state
+                const aiMessage: CombatMessage = {
+                  id: `ai-${targetAgent}-${Date.now()}`,
+                  session_id: session.id,
+                  role: targetAgent as CombatRole,
+                  content: fullContent,
+                  mentioned_agents: [],
+                  tokens_input: 0,
+                  tokens_output: 0,
+                  cost: 0,
+                  duration_ms: 0,
+                  created_at: new Date().toISOString(),
+                }
+                set((state) => ({
+                  messages: [...state.messages, aiMessage],
+                  streamingContent: '',
+                  streamingAgent: null,
+                }))
+              } else {
+                try {
+                  const parsed = JSON.parse(data)
+                  if (parsed.content) {
+                    fullContent += parsed.content
+                    set({ streamingContent: fullContent })
+                  }
+                } catch {
+                  // Ignore parse errors
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        set({ error: error instanceof Error ? error.message : 'Unknown error' })
+        break // Stop on error
+      }
+    }
+
+    set({ isSending: false, streamingAgent: null })
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
