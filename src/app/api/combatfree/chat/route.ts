@@ -1,21 +1,14 @@
 import { NextRequest } from 'next/server'
-import type { CombatFreeConfig } from '@/lib/types/combatfree'
+import { FREE_AGENTS, FREE_SYSTEM_PROMPTS } from '@/lib/types/combatfree'
+import type { FreeAgentId } from '@/lib/types/combatfree'
 
 export const runtime = 'nodejs'
 
-// gpt4free providers mapping
-const GPT4FREE_PROVIDERS: Record<string, string> = {
-  chatgpt: 'OpenaiChat',
-  claude: 'Anthropic',
-  deepseek: 'DeepSeek',
-  gemini: 'Gemini',
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const { messages, config } = await request.json() as {
+    const { messages, targetAgent } = await request.json() as {
       messages: Array<{ role: string; content: string }>
-      config: CombatFreeConfig
+      targetAgent: FreeAgentId
     }
 
     if (!messages || messages.length === 0) {
@@ -25,31 +18,29 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Try WebAI-to-API server first
-    let response: Response | null = null
-    let useGpt4free = false
-
-    try {
-      response = await callWebAIServer(config.serverUrl, messages, config.model, config.provider)
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.log('WebAI server returned error:', errorText)
-        useGpt4free = true
-      }
-    } catch (error) {
-      console.log('WebAI server not available, trying gpt4free...', error)
-      useGpt4free = true
+    if (!targetAgent || !FREE_AGENTS[targetAgent]) {
+      return new Response(JSON.stringify({ error: 'Invalid agent' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
 
-    // Fallback to gpt4free
-    if (useGpt4free) {
-      response = await callGpt4Free(messages, config.provider, config.model)
-    }
+    const agent = FREE_AGENTS[targetAgent]
+    const systemPrompt = FREE_SYSTEM_PROMPTS[targetAgent]
+
+    // Build messages with system prompt
+    const fullMessages = [
+      { role: 'system', content: systemPrompt },
+      ...messages,
+    ]
+
+    // Try free AI endpoints
+    const response = await callFreeAI(fullMessages, agent.freeProvider)
 
     if (!response || !response.ok) {
       const errorText = response ? await response.text() : 'No response'
       return new Response(JSON.stringify({
-        error: 'AI không khả dụng. Vui lòng kiểm tra WebAI-to-API server.',
+        error: `${agent.name} không khả dụng. Vui lòng thử lại.`,
         details: errorText,
       }), {
         status: 500,
@@ -79,48 +70,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Call WebAI-to-API server (gpt4free mode)
-async function callWebAIServer(
-  serverUrl: string,
+// Call free AI endpoints
+async function callFreeAI(
   messages: Array<{ role: string; content: string }>,
-  model: string,
   provider: string
 ): Promise<Response> {
-  // gpt4free requires provider name, not model name
-  const g4fProvider = GPT4FREE_PROVIDERS[provider] || 'Gemini'
-
-  return fetch(`${serverUrl}/v1/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: g4fProvider, // gpt4free uses provider as model
-      messages,
-      stream: true,
-    }),
-    signal: AbortSignal.timeout(60000),
-  })
-}
-
-// Call free AI endpoints (Pollinations AI - free and reliable)
-async function callGpt4Free(
-  messages: Array<{ role: string; content: string }>,
-  provider: string,
-  model: string
-): Promise<Response> {
-  // Map provider to Pollinations model
-  const modelMap: Record<string, string> = {
-    gemini: 'gemini',
-    chatgpt: 'openai',
-    claude: 'claude',
-    deepseek: 'deepseek',
-    auto: 'openai',
-  }
-
-  const pollinationsModel = modelMap[provider] || 'openai'
-
-  // Try Pollinations AI first (free, no API key needed)
+  // Try Pollinations AI first (free, reliable)
   try {
     const response = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
@@ -128,7 +83,7 @@ async function callGpt4Free(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: pollinationsModel,
+        model: provider, // openai, claude, gemini, mistral
         messages,
         stream: true,
       }),
@@ -138,11 +93,12 @@ async function callGpt4Free(
     if (response.ok) {
       return response
     }
+    console.log('Pollinations AI failed:', response.status)
   } catch (error) {
-    console.log('Pollinations AI failed:', error)
+    console.log('Pollinations AI error:', error)
   }
 
-  // Fallback to api.airforce (free OpenAI-compatible)
+  // Fallback to api.airforce
   try {
     const response = await fetch('https://api.airforce/chat/completions', {
       method: 'POST',
@@ -150,7 +106,7 @@ async function callGpt4Free(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: model === 'auto' ? 'gpt-4o-mini' : model,
+        model: 'gpt-4o-mini',
         messages,
         stream: true,
       }),
@@ -160,11 +116,12 @@ async function callGpt4Free(
     if (response.ok) {
       return response
     }
+    console.log('api.airforce failed:', response.status)
   } catch (error) {
-    console.log('api.airforce failed:', error)
+    console.log('api.airforce error:', error)
   }
 
-  // Return a failed response
+  // Return failed response
   return new Response(JSON.stringify({ error: 'All free AI endpoints failed' }), {
     status: 503,
     headers: { 'Content-Type': 'application/json' },

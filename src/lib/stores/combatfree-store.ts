@@ -1,23 +1,20 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { CombatFreeMessage, CombatFreeConfig } from '@/lib/types/combatfree'
-import { DEFAULT_CONFIG } from '@/lib/types/combatfree'
+import type { CombatFreeMessage, CombatFreeConfig, FreeAgentId } from '@/lib/types/combatfree'
+import { DEFAULT_CONFIG, FREE_AGENTS } from '@/lib/types/combatfree'
 
 interface CombatFreeStore {
   // State
   messages: CombatFreeMessage[]
   config: CombatFreeConfig
-  isLoading: boolean
   isSending: boolean
   streamingContent: string
+  streamingAgent: FreeAgentId | null
   error: string | null
-  serverStatus: 'unknown' | 'online' | 'offline'
 
   // Actions
-  setConfig: (config: Partial<CombatFreeConfig>) => void
-  sendMessage: (content: string) => Promise<void>
+  sendMessage: (targetAgent: FreeAgentId, content: string) => Promise<void>
   clearMessages: () => void
-  checkServerStatus: () => Promise<void>
   setError: (error: string | null) => void
   reset: () => void
 }
@@ -25,11 +22,10 @@ interface CombatFreeStore {
 const initialState = {
   messages: [],
   config: DEFAULT_CONFIG,
-  isLoading: false,
   isSending: false,
   streamingContent: '',
+  streamingAgent: null,
   error: null,
-  serverStatus: 'unknown' as const,
 }
 
 export const useCombatFreeStore = create<CombatFreeStore>()(
@@ -37,28 +33,8 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
     (set, get) => ({
       ...initialState,
 
-      setConfig: (newConfig) => {
-        set((state) => ({
-          config: { ...state.config, ...newConfig },
-        }))
-      },
-
-      checkServerStatus: async () => {
-        const { config } = get()
-        try {
-          // gpt4free uses /v1/providers endpoint, not /health
-          const response = await fetch(`${config.serverUrl}/v1/providers`, {
-            method: 'GET',
-            signal: AbortSignal.timeout(5000),
-          })
-          set({ serverStatus: response.ok ? 'online' : 'offline' })
-        } catch {
-          set({ serverStatus: 'offline' })
-        }
-      },
-
-      sendMessage: async (content: string) => {
-        const { config, messages } = get()
+      sendMessage: async (targetAgent: FreeAgentId, content: string) => {
+        const { messages } = get()
 
         if (get().isSending) return
 
@@ -66,6 +42,7 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
           isSending: true,
           error: null,
           streamingContent: '',
+          streamingAgent: targetAgent,
         })
 
         // Add user message
@@ -84,9 +61,11 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
             body: JSON.stringify({
               messages: [...messages, userMessage].map((m) => ({
                 role: m.role,
-                content: m.content,
+                content: m.role === 'assistant' && m.agent
+                  ? `[${FREE_AGENTS[m.agent].emoji} ${FREE_AGENTS[m.agent].name}]: ${m.content}`
+                  : m.content,
               })),
-              config,
+              targetAgent,
             }),
           })
 
@@ -116,14 +95,14 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
                   const aiMessage: CombatFreeMessage = {
                     id: `ai-${Date.now()}`,
                     role: 'assistant',
+                    agent: targetAgent,
                     content: fullContent,
-                    provider: config.provider,
-                    model: config.model,
                     created_at: new Date().toISOString(),
                   }
                   set((state) => ({
                     messages: [...state.messages, aiMessage],
                     streamingContent: '',
+                    streamingAgent: null,
                   }))
                 } else {
                   try {
@@ -142,12 +121,12 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
         } catch (error) {
           set({ error: error instanceof Error ? error.message : 'Unknown error' })
         } finally {
-          set({ isSending: false })
+          set({ isSending: false, streamingAgent: null })
         }
       },
 
       clearMessages: () => {
-        set({ messages: [], streamingContent: '' })
+        set({ messages: [], streamingContent: '', streamingAgent: null })
       },
 
       setError: (error) => set({ error }),
@@ -157,22 +136,8 @@ export const useCombatFreeStore = create<CombatFreeStore>()(
     {
       name: 'combatfree-storage',
       partialize: (state) => ({
-        config: state.config,
-        messages: state.messages.slice(-50), // Keep last 50 messages
+        messages: state.messages.slice(-50),
       }),
-      // Merge persisted config with defaults to pick up new serverUrl
-      merge: (persistedState, currentState) => {
-        const persisted = persistedState as Partial<CombatFreeStore>
-        return {
-          ...currentState,
-          ...persisted,
-          config: {
-            ...DEFAULT_CONFIG, // Use defaults first (new port)
-            ...persisted.config, // Then overlay user preferences
-            serverUrl: DEFAULT_CONFIG.serverUrl, // Always use latest default serverUrl
-          },
-        }
-      },
     }
   )
 )

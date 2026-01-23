@@ -1,33 +1,34 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useCombatFreeStore } from '@/lib/stores/combatfree-store'
-import { FREE_PROVIDERS } from '@/lib/types/combatfree'
-import type { FreeProvider } from '@/lib/types/combatfree'
+import { FREE_AGENTS } from '@/lib/types/combatfree'
+import type { FreeAgentId } from '@/lib/types/combatfree'
 import { CombatFreeMessage } from './combatfree-message'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { Send, Loader2, Trash2, Settings, Wifi, WifiOff, ExternalLink } from 'lucide-react'
+import { Send, Loader2, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const PROVIDERS = Object.entries(FREE_PROVIDERS) as [FreeProvider, typeof FREE_PROVIDERS[FreeProvider]][]
+const AGENTS_LIST: FreeAgentId[] = ['spark', 'lens', 'radar', 'devil']
 
 export function CombatFreeRoom() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const [selectedAgent, setSelectedAgent] = useState<FreeAgentId | null>(null)
   const [inputMessage, setInputMessage] = useState('')
-  const [showSettings, setShowSettings] = useState(false)
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false)
+  const [mentionFilter, setMentionFilter] = useState('')
+  const [mentionIndex, setMentionIndex] = useState(0)
 
   const {
     messages,
-    config,
     isSending,
     streamingContent,
+    streamingAgent,
     error,
-    serverStatus,
-    setConfig,
     sendMessage,
     clearMessages,
-    checkServerStatus,
     setError,
   } = useCombatFreeStore()
 
@@ -36,27 +37,90 @@ export function CombatFreeRoom() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, streamingContent])
 
-  // Check server status on mount
-  useEffect(() => {
-    checkServerStatus()
-  }, [checkServerStatus])
+  // Filter agents for mention dropdown
+  const filteredAgents = AGENTS_LIST.filter(agentId =>
+    FREE_AGENTS[agentId].name.toLowerCase().includes(mentionFilter.toLowerCase())
+  )
+
+  // Detect @ mention in input
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    setInputMessage(value)
+
+    const cursorPos = e.target.selectionStart || 0
+    const textBeforeCursor = value.slice(0, cursorPos)
+    const mentionMatch = textBeforeCursor.match(/@(\w*)$/)
+
+    if (mentionMatch) {
+      setShowMentionDropdown(true)
+      setMentionFilter(mentionMatch[1])
+      setMentionIndex(0)
+    } else {
+      setShowMentionDropdown(false)
+      setMentionFilter('')
+    }
+  }, [])
+
+  // Insert mention into input
+  const insertMention = useCallback((agentId: FreeAgentId) => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    const cursorPos = textarea.selectionStart || 0
+    const textBeforeCursor = inputMessage.slice(0, cursorPos)
+    const textAfterCursor = inputMessage.slice(cursorPos)
+
+    const mentionMatch = textBeforeCursor.match(/@(\w*)$/)
+    if (mentionMatch) {
+      const atPos = cursorPos - mentionMatch[0].length
+      const newText = textBeforeCursor.slice(0, atPos) + `@${FREE_AGENTS[agentId].name} ` + textAfterCursor
+      setInputMessage(newText)
+      setSelectedAgent(agentId)
+    }
+
+    setShowMentionDropdown(false)
+    setMentionFilter('')
+    textarea.focus()
+  }, [inputMessage])
 
   const handleSend = async () => {
-    if (!inputMessage.trim() || isSending) return
+    if (!selectedAgent || !inputMessage.trim() || isSending) return
 
     const message = inputMessage.trim()
     setInputMessage('')
-    await sendMessage(message)
+    setShowMentionDropdown(false)
+    await sendMessage(selectedAgent, message)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (showMentionDropdown && filteredAgents.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIndex(prev => (prev + 1) % filteredAgents.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIndex(prev => (prev - 1 + filteredAgents.length) % filteredAgents.length)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        insertMention(filteredAgents[mentionIndex])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowMentionDropdown(false)
+        return
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
     }
   }
-
-  const currentProvider = FREE_PROVIDERS[config.provider]
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col">
@@ -70,157 +134,49 @@ export function CombatFreeRoom() {
             <h1 className="font-semibold text-white flex items-center gap-2">
               Combat Free
               <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
-                Miễn phí
+                4 AI Miễn phí
               </span>
             </h1>
             <p className="text-sm text-slate-400">
-              Chat với AI miễn phí qua WebAI-to-API
+              Hội đồng 4 AI - Hoàn toàn miễn phí
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Server status */}
-          <div
-            className={cn(
-              'flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs',
-              serverStatus === 'online' && 'bg-green-500/20 text-green-400',
-              serverStatus === 'offline' && 'bg-red-500/20 text-red-400',
-              serverStatus === 'unknown' && 'bg-slate-500/20 text-slate-400'
-            )}
-          >
-            {serverStatus === 'online' ? (
-              <Wifi className="w-3 h-3" />
-            ) : (
-              <WifiOff className="w-3 h-3" />
-            )}
-            {serverStatus === 'online' ? 'Server Online' : serverStatus === 'offline' ? 'Server Offline' : 'Checking...'}
-          </div>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowSettings(!showSettings)}
-            className="text-slate-400 hover:text-white"
-          >
-            <Settings className="w-5 h-5" />
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={clearMessages}
-            className="text-slate-400 hover:text-white"
-          >
-            <Trash2 className="w-5 h-5" />
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={clearMessages}
+          className="text-slate-400 hover:text-white"
+        >
+          <Trash2 className="w-5 h-5" />
+        </Button>
       </div>
 
-      {/* Settings Panel */}
-      {showSettings && (
-        <div className="border-b border-slate-700/50 px-4 py-4 bg-slate-900/50 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Server URL */}
-            <div>
-              <label className="block text-sm text-slate-400 mb-2">
-                WebAI-to-API Server URL
-              </label>
-              <input
-                type="text"
-                value={config.serverUrl}
-                onChange={(e) => setConfig({ serverUrl: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white text-sm"
-                placeholder="http://localhost:8000"
-              />
-              <a
-                href="https://github.com/Amm1rr/WebAI-to-API"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-1"
+      {/* Agent selector bar */}
+      <div className="border-b border-slate-700/50 px-4 py-3 bg-slate-900/50">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-slate-400 mr-2">Chọn AI:</span>
+          {AGENTS_LIST.map((agentId) => {
+            const agent = FREE_AGENTS[agentId]
+            const isSelected = selectedAgent === agentId
+            return (
+              <button
+                key={agentId}
+                onClick={() => setSelectedAgent(agentId)}
+                disabled={isSending}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-all',
+                  isSelected
+                    ? `bg-gradient-to-r ${agent.color} text-white shadow-lg`
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                )}
               >
-                Hướng dẫn cài đặt <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
-
-            {/* Provider selector */}
-            <div>
-              <label className="block text-sm text-slate-400 mb-2">
-                Provider
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {PROVIDERS.map(([id, provider]) => (
-                  <button
-                    key={id}
-                    onClick={() => {
-                      setConfig({
-                        provider: id,
-                        model: provider.models[0],
-                      })
-                    }}
-                    className={cn(
-                      'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-all',
-                      config.provider === id
-                        ? `bg-gradient-to-r ${provider.color} text-white`
-                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                    )}
-                  >
-                    <span>{provider.emoji}</span>
-                    <span>{provider.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Model selector */}
-          <div>
-            <label className="block text-sm text-slate-400 mb-2">
-              Model: {config.model}
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {currentProvider.models.map((model) => (
-                <button
-                  key={model}
-                  onClick={() => setConfig({ model })}
-                  className={cn(
-                    'px-3 py-1 rounded-lg text-xs transition-all',
-                    config.model === model
-                      ? 'bg-slate-600 text-white'
-                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                  )}
-                >
-                  {model}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <Button
-            size="sm"
-            onClick={() => {
-              checkServerStatus()
-              setShowSettings(false)
-            }}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            Lưu & Kiểm tra kết nối
-          </Button>
-        </div>
-      )}
-
-      {/* Provider indicator */}
-      <div className="border-b border-slate-700/50 px-4 py-2 bg-slate-900/30 flex items-center gap-2">
-        <span className="text-slate-400 text-sm">Đang dùng:</span>
-        <div
-          className={cn(
-            'flex items-center gap-2 px-3 py-1 rounded-full text-sm bg-gradient-to-r',
-            currentProvider.color
-          )}
-        >
-          <span>{currentProvider.emoji}</span>
-          <span className="text-white font-medium">{currentProvider.name}</span>
-          <span className="text-white/70">({config.model})</span>
+                <span>{agent.emoji}</span>
+                <span>{agent.name}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 
@@ -232,21 +188,23 @@ export function CombatFreeRoom() {
             <div className="max-w-xl p-6 rounded-xl bg-slate-800/30 border border-slate-700/30 text-center">
               <div className="text-4xl mb-4">🆓</div>
               <h2 className="text-xl font-semibold text-white mb-2">
-                Chào mừng đến Combat Free!
+                Combat Free - Hội đồng 4 AI Miễn phí
               </h2>
               <p className="text-slate-400 mb-4">
-                Chat với AI hoàn toàn miễn phí. Sử dụng WebAI-to-API để kết nối với Gemini, ChatGPT, Claude và nhiều AI khác.
+                Chat với 4 AI agents hoàn toàn miễn phí!
               </p>
-              <div className="text-sm text-slate-500">
-                {serverStatus === 'offline' ? (
-                  <span className="text-yellow-400">
-                    ⚠️ Server chưa kết nối. Hãy cài đặt WebAI-to-API hoặc sử dụng gpt4free fallback.
-                  </span>
-                ) : (
-                  <span className="text-green-400">
-                    ✓ Sẵn sàng chat!
-                  </span>
-                )}
+              <div className="flex justify-center gap-4 flex-wrap">
+                {AGENTS_LIST.map((agentId) => {
+                  const agent = FREE_AGENTS[agentId]
+                  return (
+                    <div key={agentId} className="flex items-center gap-2 text-sm">
+                      <span className={cn('w-6 h-6 rounded-full bg-gradient-to-br flex items-center justify-center text-xs', agent.color)}>
+                        {agent.emoji}
+                      </span>
+                      <span className="text-slate-300">{agent.name}</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
@@ -257,14 +215,13 @@ export function CombatFreeRoom() {
         ))}
 
         {/* Streaming message */}
-        {streamingContent && (
+        {streamingContent && streamingAgent && (
           <CombatFreeMessage
             message={{
               id: 'streaming',
               role: 'assistant',
+              agent: streamingAgent,
               content: streamingContent,
-              provider: config.provider,
-              model: config.model,
               created_at: new Date().toISOString(),
             }}
             isStreaming
@@ -272,15 +229,15 @@ export function CombatFreeRoom() {
         )}
 
         {/* Loading indicator */}
-        {isSending && !streamingContent && (
+        {isSending && !streamingContent && streamingAgent && (
           <div className="flex gap-3">
             <div
               className={cn(
                 'w-10 h-10 rounded-full bg-gradient-to-br flex items-center justify-center text-lg shrink-0',
-                currentProvider.color
+                FREE_AGENTS[streamingAgent].color
               )}
             >
-              {currentProvider.emoji}
+              {FREE_AGENTS[streamingAgent].emoji}
             </div>
             <div className="bg-slate-800/50 rounded-2xl rounded-tl-none p-4">
               <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
@@ -309,22 +266,64 @@ export function CombatFreeRoom() {
         <div className="flex gap-3">
           <div className="flex-1 relative">
             <Textarea
+              ref={textareaRef}
               value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Nhập tin nhắn... (Enter để gửi, Shift+Enter để xuống dòng)"
+              placeholder={selectedAgent
+                ? `Nói với ${FREE_AGENTS[selectedAgent].name}... (gõ @ để mention AI khác)`
+                : 'Chọn AI ở trên hoặc gõ @ để bắt đầu...'
+              }
               className="bg-slate-800 border-slate-700 text-white resize-none pr-12 min-h-[48px] max-h-32"
               rows={1}
               disabled={isSending}
             />
+
+            {/* Mention Dropdown */}
+            {showMentionDropdown && filteredAgents.length > 0 && (
+              <div className="absolute bottom-full left-0 mb-2 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl overflow-hidden z-50">
+                <div className="p-2 text-xs text-slate-400 border-b border-slate-700">
+                  Chọn AI để mention
+                </div>
+                {filteredAgents.map((agentId, index) => {
+                  const agent = FREE_AGENTS[agentId]
+                  return (
+                    <button
+                      key={agentId}
+                      onClick={() => insertMention(agentId)}
+                      className={cn(
+                        'w-full flex items-center gap-3 p-3 hover:bg-slate-700/50 transition-colors text-left',
+                        index === mentionIndex && 'bg-slate-700/50'
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'w-8 h-8 rounded-full bg-gradient-to-br flex items-center justify-center text-sm shrink-0',
+                          agent.color
+                        )}
+                      >
+                        {agent.emoji}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-white text-sm">{agent.name}</div>
+                        <div className="text-xs text-slate-400 truncate">
+                          {agent.description.split(' - ')[1]}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
           <Button
             onClick={handleSend}
-            disabled={!inputMessage.trim() || isSending}
+            disabled={!selectedAgent || !inputMessage.trim() || isSending}
             className={cn(
-              'px-4 bg-gradient-to-r',
-              currentProvider.color,
-              'hover:opacity-90'
+              'px-4',
+              selectedAgent
+                ? `bg-gradient-to-r ${FREE_AGENTS[selectedAgent].color} hover:opacity-90`
+                : 'bg-slate-700 hover:bg-slate-600'
             )}
           >
             {isSending ? (
