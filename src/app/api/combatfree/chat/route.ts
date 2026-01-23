@@ -103,44 +103,69 @@ async function callWebAIServer(
   })
 }
 
-// Call gpt4free (using public endpoints or self-hosted)
+// Call free AI endpoints (Pollinations AI - free and reliable)
 async function callGpt4Free(
   messages: Array<{ role: string; content: string }>,
   provider: string,
   model: string
 ): Promise<Response> {
-  // Try multiple gpt4free endpoints
-  const endpoints = [
-    'https://api.gpt4free.io/v1/chat/completions',
-    'https://g4f.cloud/v1/chat/completions',
-  ]
+  // Map provider to Pollinations model
+  const modelMap: Record<string, string> = {
+    gemini: 'gemini',
+    chatgpt: 'openai',
+    claude: 'claude',
+    deepseek: 'deepseek',
+    auto: 'openai',
+  }
 
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: model === 'auto' ? 'gpt-4o-mini' : model,
-          messages,
-          stream: true,
-          provider: GPT4FREE_PROVIDERS[provider] || 'auto',
-        }),
-        signal: AbortSignal.timeout(30000),
-      })
+  const pollinationsModel = modelMap[provider] || 'openai'
 
-      if (response.ok) {
-        return response
-      }
-    } catch (error) {
-      console.log(`gpt4free endpoint ${endpoint} failed:`, error)
+  // Try Pollinations AI first (free, no API key needed)
+  try {
+    const response = await fetch('https://text.pollinations.ai/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: pollinationsModel,
+        messages,
+        stream: true,
+      }),
+      signal: AbortSignal.timeout(60000),
+    })
+
+    if (response.ok) {
+      return response
     }
+  } catch (error) {
+    console.log('Pollinations AI failed:', error)
+  }
+
+  // Fallback to api.airforce (free OpenAI-compatible)
+  try {
+    const response = await fetch('https://api.airforce/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model === 'auto' ? 'gpt-4o-mini' : model,
+        messages,
+        stream: true,
+      }),
+      signal: AbortSignal.timeout(60000),
+    })
+
+    if (response.ok) {
+      return response
+    }
+  } catch (error) {
+    console.log('api.airforce failed:', error)
   }
 
   // Return a failed response
-  return new Response(JSON.stringify({ error: 'All endpoints failed' }), {
+  return new Response(JSON.stringify({ error: 'All free AI endpoints failed' }), {
     status: 503,
     headers: { 'Content-Type': 'application/json' },
   })
