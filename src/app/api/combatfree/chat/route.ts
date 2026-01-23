@@ -70,22 +70,35 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Model mapping for better Vietnamese support
+const MODEL_MAP: Record<string, string> = {
+  openai: 'openai',
+  claude: 'claude',
+  gemini: 'gemini',
+  mistral: 'mistral',
+}
+
 // Call free AI endpoints
 async function callFreeAI(
   messages: Array<{ role: string; content: string }>,
   provider: string
 ): Promise<Response> {
+  const model = MODEL_MAP[provider] || 'openai'
+
   // Try Pollinations AI first (free, reliable)
   try {
     const response = await fetch('https://text.pollinations.ai/', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json; charset=utf-8',
+        'Accept': 'text/event-stream',
+        'Accept-Charset': 'utf-8',
       },
       body: JSON.stringify({
-        model: provider, // openai, claude, gemini, mistral
+        model,
         messages,
         stream: true,
+        temperature: 0.7,
       }),
       signal: AbortSignal.timeout(60000),
     })
@@ -103,7 +116,8 @@ async function callFreeAI(
     const response = await fetch('https://api.airforce/chat/completions', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/json; charset=utf-8',
+        'Accept': 'text/event-stream',
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
@@ -128,23 +142,33 @@ async function callFreeAI(
   })
 }
 
-// Transform stream to our format
+// Transform stream to our format with proper UTF-8 handling
 function createTransformStream() {
   let doneSent = false
+  let buffer = ''
+  const decoder = new TextDecoder('utf-8')
+  const encoder = new TextEncoder()
 
   return new TransformStream({
     transform(chunk, controller) {
-      const text = new TextDecoder().decode(chunk)
-      const lines = text.split('\n')
+      // Decode with stream mode to handle partial UTF-8 sequences
+      buffer += decoder.decode(chunk, { stream: true })
+      const lines = buffer.split('\n')
+
+      // Keep the last incomplete line in buffer
+      buffer = lines.pop() || ''
 
       for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6)
+        const trimmedLine = line.trim()
+        if (!trimmedLine) continue
+
+        if (trimmedLine.startsWith('data: ')) {
+          const data = trimmedLine.slice(6).trim()
 
           if (data === '[DONE]') {
             if (!doneSent) {
               doneSent = true
-              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'))
             }
             continue
           }
@@ -157,26 +181,64 @@ function createTransformStream() {
             if (parsed.choices?.[0]?.delta?.content) {
               content = parsed.choices[0].delta.content
             }
-            // Direct content
-            else if (parsed.content) {
+            // Direct content format
+            else if (typeof parsed.content === 'string') {
               content = parsed.content
+            }
+            // Message format
+            else if (parsed.message?.content) {
+              content = parsed.message.content
             }
 
             if (content) {
               controller.enqueue(
-                new TextEncoder().encode(`data: ${JSON.stringify({ content })}\n\n`)
+                encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
               )
             }
 
             // Check for finish
             if (parsed.choices?.[0]?.finish_reason === 'stop' && !doneSent) {
               doneSent = true
-              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'))
             }
           } catch {
-            // Ignore parse errors
+            // If JSON parsing fails, try to extract content directly
+            // This handles plain text responses
+            if (data && data.length > 0 && !data.startsWith('{')) {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ content: data })}\n\n`)
+              )
+            }
           }
         }
+      }
+    },
+    flush(controller) {
+      // Process any remaining buffer content
+      if (buffer.trim()) {
+        const trimmedLine = buffer.trim()
+        if (trimmedLine.startsWith('data: ')) {
+          const data = trimmedLine.slice(6).trim()
+          if (data && data !== '[DONE]') {
+            try {
+              const parsed = JSON.parse(data)
+              const content = parsed.choices?.[0]?.delta?.content ||
+                parsed.content ||
+                parsed.message?.content
+              if (content) {
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ content })}\n\n`)
+                )
+              }
+            } catch {
+              // Ignore
+            }
+          }
+        }
+      }
+      // Ensure DONE is sent
+      if (!doneSent) {
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
       }
     },
   })
