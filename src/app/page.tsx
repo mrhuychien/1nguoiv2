@@ -6,6 +6,7 @@ import {
   Phase3Section,
   ToolsSection,
   AICouncilSection,
+  CombatSection,
   PricingSection,
   FAQSection,
   CTASection,
@@ -22,6 +23,7 @@ export default function HomePage() {
       <Phase3Section />
       <ToolsSection />
       <AICouncilSection />
+      <CombatSection />
       <PricingSection />
       <FAQSection />
       <CTASection />
