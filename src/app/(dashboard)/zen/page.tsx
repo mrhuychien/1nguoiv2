@@ -87,16 +87,32 @@ export default function ZenPage() {
       })()
     : null;
 
-  // Show task complete dialog when timer completes
+  // Auto-log and show dialog when timer completes
   useEffect(() => {
-    if (timerState === "completed" && currentTimerTaskId) {
+    if (timerState === "completed") {
+      // Always show the completion dialog (with or without task)
       setShowTaskCompleteDialog(true);
-      // Add time to the task
-      if (currentTimerTaskType === "template") {
+
+      // Add time to the task if one is selected
+      if (currentTimerTaskId && currentTimerTaskType === "template") {
         addTemplateTaskTimeInDb(currentTimerTaskId, timerTargetMinutes);
       }
+
+      // Auto-log the work entry immediately when timer completes
+      addWorkLogEntry({
+        taskId: currentTask?.id || "free-session",
+        taskTitle: currentTask?.title || "Phiên làm việc tự do",
+        taskEmoji: currentTask?.emoji,
+        projectId: activeProject?.id,
+        projectName: activeProject?.title,
+        projectColor: activeProject?.color || undefined,
+        durationMinutes: timerTargetMinutes,
+        status: "completed",
+        zone: currentZone || undefined,
+      });
     }
-  }, [timerState, currentTimerTaskId, currentTimerTaskType, timerTargetMinutes, addTemplateTaskTimeInDb, setShowTaskCompleteDialog]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timerState]);
 
   // Handle drag events for timer drop zone
   const handleDragOver = (e: React.DragEvent) => {
@@ -127,50 +143,29 @@ export default function ZenPage() {
     }
   };
 
-  // Log work entry helper
-  const logWorkEntry = (status: "completed" | "in_progress" | "paused") => {
-    if (!currentTask) return;
-
-    addWorkLogEntry({
-      taskId: currentTask.id,
-      taskTitle: currentTask.title,
-      taskEmoji: currentTask.emoji,
-      projectId: activeProject?.id,
-      projectName: activeProject?.title,
-      projectColor: activeProject?.color || undefined,
-      durationMinutes: timerTargetMinutes,
-      status,
-      zone: currentZone || undefined,
-    });
-  };
 
   // Handle task completion
   const handleCompleteTask = () => {
-    if (!currentTimerTaskId || !currentTimerTaskType) return;
-
-    // Log work entry
-    logWorkEntry("completed");
-
-    if (currentTimerTaskType === "template") {
-      completeTemplateTaskInDb(currentTimerTaskId);
-    } else {
-      // For manual tasks, update status to completed
-      updateTaskInDb(currentTimerTaskId, {
-        status: "completed",
-        completed: true,
-        completed_at: new Date().toISOString(),
-      });
+    // Complete task in DB if one is selected
+    if (currentTimerTaskId && currentTimerTaskType) {
+      if (currentTimerTaskType === "template") {
+        completeTemplateTaskInDb(currentTimerTaskId);
+      } else {
+        // For manual tasks, update status to completed
+        updateTaskInDb(currentTimerTaskId, {
+          status: "completed",
+          completed: true,
+          completed_at: new Date().toISOString(),
+        });
+      }
+      clearTimerTask();
     }
 
-    clearTimerTask();
     setShowTaskCompleteDialog(false);
   };
 
   // Handle continue working
   const handleContinueTask = () => {
-    // Log work entry as in_progress
-    logWorkEntry("in_progress");
-
     setShowTaskCompleteDialog(false);
     // Timer will be reset, user can start another session
   };
@@ -199,20 +194,17 @@ export default function ZenPage() {
 
   // Handle next phase - complete current task and move to next
   const handleNextPhase = () => {
-    if (!currentTimerTaskId || !currentTimerTaskType) return;
-
-    // Log work entry
-    logWorkEntry("completed");
-
-    // Complete current task
-    if (currentTimerTaskType === "template") {
-      completeTemplateTaskInDb(currentTimerTaskId);
-    } else {
-      updateTaskInDb(currentTimerTaskId, {
-        status: "completed",
-        completed: true,
-        completed_at: new Date().toISOString(),
-      });
+    // Complete current task in DB if one is selected
+    if (currentTimerTaskId && currentTimerTaskType) {
+      if (currentTimerTaskType === "template") {
+        completeTemplateTaskInDb(currentTimerTaskId);
+      } else {
+        updateTaskInDb(currentTimerTaskId, {
+          status: "completed",
+          completed: true,
+          completed_at: new Date().toISOString(),
+        });
+      }
     }
 
     // Start next task if available
@@ -435,10 +427,10 @@ export default function ZenPage() {
       <SessionCompleteOverlay />
       <DeepWorkOverlay />
 
-      {/* Task Complete Dialog */}
-      {showTaskCompleteDialog && currentTask && (
+      {/* Task Complete Dialog - shows for both task and free sessions */}
+      {showTaskCompleteDialog && (
         <TaskCompleteDialog
-          task={currentTask}
+          task={currentTask || { id: "free-session", title: "Phiên làm việc tự do", emoji: "⏱️" }}
           nextTask={nextTask}
           timeSpent={timerTargetMinutes}
           onComplete={handleCompleteTask}
