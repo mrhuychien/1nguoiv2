@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, HelpCircle, Loader2, Target, X, CheckCircle2, RotateCcw } from "lucide-react";
+import { Settings, HelpCircle, Loader2, Target, X, CheckCircle2, RotateCcw, BarChart3 } from "lucide-react";
+import Link from "next/link";
 import {
   TimerRing,
   ZenBell,
@@ -253,6 +254,13 @@ export default function ZenPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <Link
+                href="/zen/report"
+                className="p-2.5 rounded-lg text-gray-400 hover:bg-gray-800/50 hover:text-white transition-colors"
+                title="Báo cáo làm việc"
+              >
+                <BarChart3 className="w-5 h-5" />
+              </Link>
               <ZenBell />
               <button className="p-2.5 rounded-lg text-gray-400 hover:bg-gray-800/50 hover:text-white transition-colors">
                 <HelpCircle className="w-5 h-5" />
