@@ -50,6 +50,8 @@ interface ZenStoreState {
   timerTargetMinutes: number;
   timerConfig: ZenTimerConfig;
   sessionsCompleted: number;
+  timerStartedAt: number | null; // Timestamp when timer started
+  timerPausedAt: number | null;  // Timestamp when timer was paused (to track pause duration)
 
   // Flow & Focus
   flowState: FlowState;
@@ -193,6 +195,8 @@ const initialState: ZenStoreState = {
   timerTargetMinutes: 25,
   timerConfig: DEFAULT_TIMER_CONFIG,
   sessionsCompleted: 0,
+  timerStartedAt: null,
+  timerPausedAt: null,
 
   flowState: "rest",
   isDeepWorkMode: false,
@@ -541,20 +545,44 @@ export const useZenStore = create<ZenStore>()(
         });
       },
 
-      // Timer actions
+      // Timer actions - using timestamps for accurate timing even when tab is in background
       startTimer: (minutes) => {
         const targetMinutes = minutes || get().timerTargetMinutes;
+        const now = Date.now();
         set({
           timerState: "running",
           timerSeconds: targetMinutes * 60,
           timerTargetMinutes: targetMinutes,
+          timerStartedAt: now,
+          timerPausedAt: null,
           flowState: "focus",
         });
       },
 
-      pauseTimer: () => set({ timerState: "paused" }),
+      pauseTimer: () => {
+        const now = Date.now();
+        set({
+          timerState: "paused",
+          timerPausedAt: now,
+        });
+      },
 
-      resumeTimer: () => set({ timerState: "running" }),
+      resumeTimer: () => {
+        const { timerStartedAt, timerPausedAt } = get();
+        const now = Date.now();
+
+        // Adjust start time to account for pause duration
+        if (timerStartedAt && timerPausedAt) {
+          const pauseDuration = now - timerPausedAt;
+          set({
+            timerState: "running",
+            timerStartedAt: timerStartedAt + pauseDuration,
+            timerPausedAt: null,
+          });
+        } else {
+          set({ timerState: "running", timerPausedAt: null });
+        }
+      },
 
       stopTimer: () => {
         const { timerTargetMinutes, timerSeconds } = get();
@@ -567,19 +595,28 @@ export const useZenStore = create<ZenStore>()(
         set({
           timerState: "idle",
           timerSeconds: 0,
+          timerStartedAt: null,
+          timerPausedAt: null,
           flowState: "rest",
         });
       },
 
       tickTimer: () => {
-        const { timerState, timerSeconds, bellEnabled } = get();
-        if (timerState !== "running") return;
+        const { timerState, timerStartedAt, timerTargetMinutes, bellEnabled } = get();
+        if (timerState !== "running" || !timerStartedAt) return;
 
-        if (timerSeconds <= 1) {
+        const now = Date.now();
+        const totalSeconds = timerTargetMinutes * 60;
+        const elapsedSeconds = Math.floor((now - timerStartedAt) / 1000);
+        const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
+
+        if (remainingSeconds <= 0) {
           // Timer completed
           set({
             timerState: "completed",
             timerSeconds: 0,
+            timerStartedAt: null,
+            timerPausedAt: null,
             sessionsCompleted: get().sessionsCompleted + 1,
             showSessionComplete: true,
             flowState: "rest",
@@ -590,12 +627,12 @@ export const useZenStore = create<ZenStore>()(
           }
         } else {
           // Check for flow state transition (after 10 minutes of focus)
-          const elapsedMinutes = get().timerTargetMinutes - Math.floor(timerSeconds / 60);
+          const elapsedMinutes = Math.floor(elapsedSeconds / 60);
           if (elapsedMinutes >= 10 && get().flowState === "focus") {
             set({ flowState: "flow" });
           }
 
-          set({ timerSeconds: timerSeconds - 1 });
+          set({ timerSeconds: remainingSeconds });
         }
       },
 
@@ -603,6 +640,8 @@ export const useZenStore = create<ZenStore>()(
         set({
           timerState: "idle",
           timerSeconds: 0,
+          timerStartedAt: null,
+          timerPausedAt: null,
           flowState: "rest",
         });
       },
