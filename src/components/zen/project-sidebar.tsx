@@ -182,12 +182,13 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
 
                 {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span
                       className={cn(
-                        "font-medium truncate",
+                        "font-medium",
                         isActive ? "text-white" : "text-gray-300"
                       )}
+                      title={project.title}
                     >
                       {project.title}
                     </span>

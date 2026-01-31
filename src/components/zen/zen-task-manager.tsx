@@ -443,7 +443,7 @@ export function ZenTaskManager({ project, className }: ZenTaskManagerProps) {
                     {task.emoji && (
                       <span className="text-sm flex-shrink-0">{task.emoji}</span>
                     )}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0" title={task.title}>
                       <span className={cn(
                         "text-sm block truncate",
                         task.status === "in_progress" ? "text-white" : "text-gray-300"
@@ -532,7 +532,7 @@ export function ZenTaskManager({ project, className }: ZenTaskManagerProps) {
                   >
                     <StatusIcon className={cn("w-4 h-4 flex-shrink-0", config.color)} />
                     {task.emoji && <span className="text-sm opacity-60">{task.emoji}</span>}
-                    <span className="text-sm text-gray-500 line-through flex-1 truncate">
+                    <span className="text-sm text-gray-500 line-through flex-1 truncate" title={task.title}>
                       {task.title}
                     </span>
                     <button
