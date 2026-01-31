@@ -14,3 +14,4 @@ export { ProjectTasksPanel } from "./project-tasks-panel";
 export { WorkLogPanel } from "./work-log-panel";
 export { DraggablePanel, PanelContainer } from "./draggable-panel";
 export { WorkReport } from "./work-report";
+export { ZenTaskManager } from "./zen-task-manager";

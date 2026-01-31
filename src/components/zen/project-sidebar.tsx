@@ -13,11 +13,6 @@ import {
   Code,
   Palette,
   ListTodo,
-  Circle,
-  CheckCircle2,
-  Clock,
-  SkipForward,
-  GripVertical,
   Eye,
 } from "lucide-react";
 import Link from "next/link";
@@ -27,15 +22,12 @@ import { useUser } from "@/hooks/use-user";
 import { cn } from "@/lib/utils";
 import { TemplateSelector } from "./template-selector";
 import { TemplatePreview } from "./template-preview";
+import { ZenTaskManager } from "./zen-task-manager";
 import type { TemplateId } from "@/types/zen";
-import type { Task } from "@/types/database.types";
 import {
   getTemplateEstimatedTime,
   formatMinutesToHours,
 } from "@/lib/data/project-templates";
-
-// Task status type from database
-type TaskStatus = Task["status"];
 
 interface ProjectSidebarProps {
   className?: string;
@@ -60,23 +52,13 @@ const COLORS = [
   "#eab308", // yellow
 ];
 
-const STATUS_ICONS: Record<TaskStatus, React.ElementType> = {
-  pending: Circle,
-  in_progress: Clock,
-  completed: CheckCircle2,
-  blocked: Circle,
-  skipped: SkipForward,
+const LIFECYCLE_LABELS: Record<string, { label: string; emoji: string }> = {
+  idea: { label: "Idea", emoji: "💡" },
+  designing: { label: "Design", emoji: "📐" },
+  building: { label: "Build", emoji: "🏗️" },
+  launching: { label: "Launch", emoji: "🚀" },
+  growing: { label: "Grow", emoji: "📈" },
 };
-
-// Unified task type for display
-interface DisplayTask {
-  id: string;
-  title: string;
-  status: TaskStatus;
-  estimatedMinutes: number;
-  emoji?: string;
-  isTemplate: boolean;
-}
 
 export function ProjectSidebar({ className }: ProjectSidebarProps) {
   const { user } = useUser();
@@ -134,25 +116,7 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
           // Get both template and manual tasks from unified store
           const templateTasks = getTemplateTasks(project.id);
           const manualTasks = getManualTasks(project.id);
-
-          // Combine into display tasks
-          const allTasks: DisplayTask[] = [
-            ...templateTasks.map((t) => ({
-              id: t.id,
-              title: t.title,
-              status: t.status,
-              estimatedMinutes: t.estimated_minutes,
-              emoji: t.emoji || undefined,
-              isTemplate: true,
-            })),
-            ...manualTasks.map((t) => ({
-              id: t.id,
-              title: t.title,
-              status: t.status,
-              estimatedMinutes: t.estimated_minutes,
-              isTemplate: false,
-            })),
-          ];
+          const allTasks = [...templateTasks, ...manualTasks];
 
           const completedCount = allTasks.filter(
             (t) => t.status === "completed" || t.status === "skipped"
@@ -163,29 +127,11 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
               ? (completedCount / totalTasks) * 100
               : 0;
 
-          // Filter active tasks for display (pending + in_progress)
-          const activeTasks = allTasks.filter(
-            (t) => t.status === "pending" || t.status === "in_progress"
-          ).sort((a, b) => {
-            // in_progress first
-            if (a.status === "in_progress" && b.status !== "in_progress") return -1;
-            if (b.status === "in_progress" && a.status !== "in_progress") return 1;
-            return 0;
-          });
+          const lifecycle = LIFECYCLE_LABELS[project.lifecycle] || LIFECYCLE_LABELS.building;
 
           const handleProjectClick = () => {
             setActiveProject(project.id);
             setExpandedProjectId(isExpanded ? null : project.id);
-          };
-
-          const handleDragStart = (e: React.DragEvent, task: DisplayTask) => {
-            e.dataTransfer.setData("application/json", JSON.stringify({
-              taskId: task.id,
-              taskType: task.isTemplate ? "template" : "manual",
-              title: task.title,
-              emoji: task.emoji,
-            }));
-            e.dataTransfer.effectAllowed = "move";
           };
 
           return (
@@ -230,6 +176,10 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
                     >
                       {project.title}
                     </span>
+                    {/* Phase badge */}
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700/50 text-gray-400 flex-shrink-0">
+                      {lifecycle.emoji} {lifecycle.label}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs text-gray-500">
@@ -259,55 +209,10 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
                 </Link>
               </button>
 
-              {/* Expandable Task List */}
+              {/* Expandable Task Manager */}
               {isExpanded && (
-                <div className="ml-4 mt-1 space-y-1 animate-zen-fade">
-                  {activeTasks.length === 0 ? (
-                    <p className="text-xs text-gray-500 p-2 pl-6">
-                      Không có task nào
-                    </p>
-                  ) : (
-                    activeTasks.slice(0, 5).map((task) => {
-                      const StatusIcon = STATUS_ICONS[task.status];
-                      return (
-                        <div
-                          key={task.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, task)}
-                          className={cn(
-                            "flex items-center gap-2 p-2 rounded-lg cursor-grab active:cursor-grabbing transition-all",
-                            "border border-transparent hover:border-gray-700 hover:bg-gray-800/50",
-                            task.status === "in_progress" && "bg-cyan-500/10 border-cyan-500/30"
-                          )}
-                        >
-                          <GripVertical className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                          <StatusIcon
-                            className={cn(
-                              "w-4 h-4 flex-shrink-0",
-                              task.status === "in_progress" ? "text-cyan-400" : "text-gray-500"
-                            )}
-                          />
-                          {task.emoji && (
-                            <span className="text-sm flex-shrink-0">{task.emoji}</span>
-                          )}
-                          <span className={cn(
-                            "text-sm truncate flex-1",
-                            task.status === "in_progress" ? "text-white" : "text-gray-400"
-                          )}>
-                            {task.title}
-                          </span>
-                          <span className="text-[10px] text-gray-600 flex-shrink-0">
-                            {task.estimatedMinutes}m
-                          </span>
-                        </div>
-                      );
-                    })
-                  )}
-                  {activeTasks.length > 5 && (
-                    <p className="text-xs text-gray-500 p-2 pl-6">
-                      +{activeTasks.length - 5} tasks khác
-                    </p>
-                  )}
+                <div className="ml-2 mt-2 p-3 rounded-lg bg-gray-900/50 border border-gray-800 animate-zen-fade">
+                  <ZenTaskManager project={project} />
                 </div>
               )}
             </div>
