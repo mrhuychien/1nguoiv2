@@ -14,6 +14,7 @@ import {
   Palette,
   ListTodo,
   Eye,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import { useZenStore } from "@/store/zen-store";
@@ -70,6 +71,7 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
     isInitialized,
     getTemplateTasks,
     getManualTasks,
+    deleteProjectFromDb,
   } = useProjectStore();
 
   // Keep UI state in zen-store
@@ -132,6 +134,19 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
           const handleProjectClick = () => {
             setActiveProject(project.id);
             setExpandedProjectId(isExpanded ? null : project.id);
+          };
+
+          const handleDeleteProject = async (e: React.MouseEvent) => {
+            e.stopPropagation();
+            if (confirm(`Bạn có chắc muốn xóa dự án "${project.title}"? Tất cả tasks trong dự án cũng sẽ bị xóa.`)) {
+              await deleteProjectFromDb(project.id);
+              if (activeProjectId === project.id) {
+                setActiveProject(null);
+              }
+              if (expandedProjectId === project.id) {
+                setExpandedProjectId(null);
+              }
+            }
           };
 
           return (
@@ -198,15 +213,24 @@ export function ProjectSidebar({ className }: ProjectSidebarProps) {
                   </div>
                 </div>
 
-                {/* View project detail button */}
-                <Link
-                  href={`/projects/${project.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 hover:text-cyan-400 hover:bg-gray-800/50 transition-colors opacity-0 group-hover:opacity-100"
-                  title="Xem chi tiết project"
-                >
-                  <Eye className="w-4 h-4" />
-                </Link>
+                {/* Action buttons */}
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Link
+                    href={`/projects/${project.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 hover:text-cyan-400 hover:bg-gray-800/50 transition-colors"
+                    title="Xem chi tiết project"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Link>
+                  <button
+                    onClick={handleDeleteProject}
+                    className="flex-shrink-0 p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/20 transition-colors"
+                    title="Xóa dự án"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </button>
 
               {/* Expandable Task Manager */}
