@@ -18,6 +18,7 @@ import {
   WorkLogPanel,
   DraggablePanel,
   PanelContainer,
+  SessionResultPanel,
 } from "@/components/zen";
 import { useZenStore, getCurrentZone } from "@/store/zen-store";
 import { useProjectStore } from "@/store/project-store";
@@ -384,7 +385,7 @@ export default function ZenPage() {
                 </PanelContainer>
               </div>
 
-              {/* Right sidebar - Schedule and Stats */}
+              {/* Right sidebar - Schedule, Results and Stats */}
               <aside className="col-span-12 lg:col-span-3">
                 <PanelContainer
                   panelOrder={rightPanelOrder}
@@ -392,6 +393,10 @@ export default function ZenPage() {
                 >
                   <DraggablePanel id="schedule">
                     <ZenSchedule />
+                  </DraggablePanel>
+
+                  <DraggablePanel id="session-result">
+                    <SessionResultPanel />
                   </DraggablePanel>
 
                   <DraggablePanel id="stats">

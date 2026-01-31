@@ -152,6 +152,8 @@ interface ZenStoreActions {
 
   // Work Log actions
   addWorkLogEntry: (entry: Omit<WorkLogEntry, "id" | "date" | "timestamp">) => void;
+  updateWorkLogEntry: (id: string, updates: Partial<WorkLogEntry>) => void;
+  getLatestWorkLogEntry: () => WorkLogEntry | null;
   getTodayWorkLog: () => WorkLogEntry[];
   getWorkLogByDate: (date: string) => WorkLogEntry[];
   clearWorkLog: () => void;
@@ -209,7 +211,7 @@ const initialState: ZenStoreState = {
 
   // Default panel order
   centerPanelOrder: ["garden", "worklog"],
-  rightPanelOrder: ["schedule", "stats"],
+  rightPanelOrder: ["schedule", "session-result", "stats"],
 
   stats: {
     todayMinutes: 0,
@@ -785,6 +787,19 @@ export const useZenStore = create<ZenStore>()(
         }));
       },
 
+      updateWorkLogEntry: (id, updates) => {
+        set((state) => ({
+          workLog: state.workLog.map((entry) =>
+            entry.id === id ? { ...entry, ...updates } : entry
+          ),
+        }));
+      },
+
+      getLatestWorkLogEntry: () => {
+        const { workLog } = get();
+        return workLog.length > 0 ? workLog[0] : null;
+      },
+
       getTodayWorkLog: () => {
         const today = new Date().toISOString().split("T")[0];
         return get().workLog.filter((entry) => entry.date === today);
@@ -810,7 +825,7 @@ export const useZenStore = create<ZenStore>()(
       resetPanelOrder: () => {
         set({
           centerPanelOrder: ["garden", "worklog"],
-          rightPanelOrder: ["schedule", "stats"],
+          rightPanelOrder: ["schedule", "session-result", "stats"],
         });
       },
 

@@ -15,3 +15,4 @@ export { WorkLogPanel } from "./work-log-panel";
 export { DraggablePanel, PanelContainer } from "./draggable-panel";
 export { WorkReport } from "./work-report";
 export { ZenTaskManager } from "./zen-task-manager";
+export { SessionResultPanel } from "./session-result-panel";

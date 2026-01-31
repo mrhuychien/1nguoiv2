@@ -110,6 +110,19 @@ export interface WorkLogEntry {
   durationMinutes: number;
   status: "completed" | "in_progress" | "paused";
   zone?: DeepWorkZone;
+  // Session results
+  notes?: string;
+  files?: SessionFile[];
+}
+
+// File attachment for session results
+export interface SessionFile {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  url: string; // Base64 data URL or blob URL
+  uploadedAt: string;
 }
 
 export interface ZenScheduleBlock {

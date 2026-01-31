@@ -9,6 +9,9 @@ import {
   History,
   ChevronDown,
   ChevronUp,
+  FileText,
+  Paperclip,
+  File,
 } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
 import { WorkLogEntry } from "@/types/zen";
@@ -136,6 +139,8 @@ export function WorkLogPanel({ className }: WorkLogPanelProps) {
 function WorkLogEntryCard({ entry }: { entry: WorkLogEntry }) {
   const status = STATUS_CONFIG[entry.status];
   const StatusIcon = status.icon;
+  const hasNotes = entry.notes && entry.notes.trim().length > 0;
+  const hasFiles = entry.files && entry.files.length > 0;
 
   return (
     <div className="p-3 rounded-lg bg-gray-900/50 border border-gray-800 hover:bg-gray-800/50 transition-colors">
@@ -156,7 +161,7 @@ function WorkLogEntryCard({ entry }: { entry: WorkLogEntry }) {
             {entry.taskEmoji && (
               <span className="text-sm">{entry.taskEmoji}</span>
             )}
-            <p className="text-sm font-medium text-white truncate">
+            <p className="text-sm font-medium text-white truncate" title={entry.taskTitle}>
               {entry.taskTitle}
             </p>
           </div>
@@ -196,7 +201,63 @@ function WorkLogEntryCard({ entry }: { entry: WorkLogEntry }) {
                 {entry.zone === "morning" ? "Sáng" : entry.zone === "afternoon" ? "Chiều" : "Tối"}
               </span>
             )}
+
+            {/* Notes indicator */}
+            {hasNotes && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 flex items-center gap-1">
+                <FileText className="w-3 h-3" />
+                Ghi chú
+              </span>
+            )}
+
+            {/* Files indicator */}
+            {hasFiles && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 flex items-center gap-1">
+                <Paperclip className="w-3 h-3" />
+                {entry.files!.length} file
+              </span>
+            )}
           </div>
+
+          {/* Notes preview */}
+          {hasNotes && (
+            <div className="mt-2 p-2 rounded bg-gray-800/50 border border-gray-700">
+              <p className="text-xs text-gray-400 line-clamp-2">{entry.notes}</p>
+            </div>
+          )}
+
+          {/* Files preview */}
+          {hasFiles && (
+            <div className="mt-2 flex gap-1.5 flex-wrap">
+              {entry.files!.slice(0, 3).map((file) => {
+                const isImage = file.type.startsWith("image/");
+                return (
+                  <div
+                    key={file.id}
+                    className="relative group"
+                    title={file.name}
+                  >
+                    {isImage ? (
+                      <img
+                        src={file.url}
+                        alt={file.name}
+                        className="w-10 h-10 rounded object-cover border border-gray-700"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded bg-gray-700 flex items-center justify-center border border-gray-600">
+                        <File className="w-4 h-4 text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {entry.files!.length > 3 && (
+                <div className="w-10 h-10 rounded bg-gray-700 flex items-center justify-center border border-gray-600 text-xs text-gray-400">
+                  +{entry.files!.length - 3}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
