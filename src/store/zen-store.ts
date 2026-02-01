@@ -666,11 +666,11 @@ export const useZenStore = create<ZenStore>()(
       },
 
       exitDeepWorkMode: () => {
+        // Only toggle overlay, timer continues running
         set({
           isDeepWorkMode: false,
           showDeepWorkOverlay: false,
         });
-        get().stopTimer();
       },
 
       // Schedule actions
