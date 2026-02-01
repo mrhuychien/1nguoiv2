@@ -12,9 +12,12 @@ import {
   FileText,
   Paperclip,
   File,
+  X,
+  Download,
+  ZoomIn,
 } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
-import { WorkLogEntry } from "@/types/zen";
+import { WorkLogEntry, SessionFile } from "@/types/zen";
 import { cn } from "@/lib/utils";
 
 interface WorkLogPanelProps {
@@ -65,8 +68,26 @@ const STATUS_CONFIG = {
 export function WorkLogPanel({ className }: WorkLogPanelProps) {
   const { getTodayWorkLog } = useZenStore();
   const [isExpanded, setIsExpanded] = useState(true);
+  const [viewingFile, setViewingFile] = useState<SessionFile | null>(null);
 
   const todayLog = getTodayWorkLog();
+
+  const handleViewFile = (file: SessionFile) => {
+    if (file.type.startsWith("image/")) {
+      setViewingFile(file);
+    } else {
+      handleDownloadFile(file);
+    }
+  };
+
+  const handleDownloadFile = (file: SessionFile) => {
+    const link = document.createElement("a");
+    link.href = file.url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Calculate today's total time
   const totalMinutes = todayLog.reduce((sum, entry) => sum + entry.durationMinutes, 0);
@@ -126,9 +147,55 @@ export function WorkLogPanel({ className }: WorkLogPanelProps) {
             </div>
           ) : (
             todayLog.map((entry) => (
-              <WorkLogEntryCard key={entry.id} entry={entry} />
+              <WorkLogEntryCard
+                key={entry.id}
+                entry={entry}
+                onViewFile={handleViewFile}
+              />
             ))
           )}
+        </div>
+      )}
+
+      {/* Image Viewer Modal */}
+      {viewingFile && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center animate-fade-in"
+          onClick={() => setViewingFile(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]">
+            {/* Close button */}
+            <button
+              onClick={() => setViewingFile(null)}
+              className="absolute -top-10 right-0 p-2 text-white/70 hover:text-white transition-colors"
+              title="Đóng"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Image */}
+            <img
+              src={viewingFile.url}
+              alt={viewingFile.name}
+              className="max-w-full max-h-[85vh] object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+
+            {/* File info */}
+            <div className="absolute -bottom-10 left-0 right-0 flex items-center justify-between text-sm text-white/70">
+              <span className="truncate max-w-[60%]">{viewingFile.name}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadFile(viewingFile);
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded hover:bg-white/10 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                <span>Tải xuống</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -136,7 +203,12 @@ export function WorkLogPanel({ className }: WorkLogPanelProps) {
 }
 
 // Work log entry card
-function WorkLogEntryCard({ entry }: { entry: WorkLogEntry }) {
+interface WorkLogEntryCardProps {
+  entry: WorkLogEntry;
+  onViewFile: (file: SessionFile) => void;
+}
+
+function WorkLogEntryCard({ entry, onViewFile }: WorkLogEntryCardProps) {
   const status = STATUS_CONFIG[entry.status];
   const StatusIcon = status.icon;
   const hasNotes = entry.notes && entry.notes.trim().length > 0;
@@ -232,23 +304,29 @@ function WorkLogEntryCard({ entry }: { entry: WorkLogEntry }) {
               {entry.files!.slice(0, 3).map((file) => {
                 const isImage = file.type.startsWith("image/");
                 return (
-                  <div
+                  <button
                     key={file.id}
+                    onClick={() => onViewFile(file)}
                     className="relative group"
-                    title={file.name}
+                    title={isImage ? "Xem ảnh" : "Tải xuống"}
                   >
                     {isImage ? (
-                      <img
-                        src={file.url}
-                        alt={file.name}
-                        className="w-10 h-10 rounded object-cover border border-gray-700"
-                      />
+                      <>
+                        <img
+                          src={file.url}
+                          alt={file.name}
+                          className="w-10 h-10 rounded object-cover border border-gray-700"
+                        />
+                        <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ZoomIn className="w-4 h-4 text-white" />
+                        </div>
+                      </>
                     ) : (
-                      <div className="w-10 h-10 rounded bg-gray-700 flex items-center justify-center border border-gray-600">
+                      <div className="w-10 h-10 rounded bg-gray-700 flex items-center justify-center border border-gray-600 hover:bg-gray-600 transition-colors">
                         <File className="w-4 h-4 text-gray-400" />
                       </div>
                     )}
-                  </div>
+                  </button>
                 );
               })}
               {entry.files!.length > 3 && (
