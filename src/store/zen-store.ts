@@ -902,6 +902,36 @@ export const useZenStore = create<ZenStore>()(
         centerPanelOrder: state.centerPanelOrder,
         rightPanelOrder: state.rightPanelOrder,
       }),
+      onRehydrateStorage: () => (state) => {
+        // Migrate: ensure new panels are added to panel order
+        if (state) {
+          const requiredRightPanels = ["schedule", "session-result", "stats"];
+          const currentRightPanels = state.rightPanelOrder || [];
+
+          // Add missing panels
+          const missingPanels = requiredRightPanels.filter(
+            (p) => !currentRightPanels.includes(p)
+          );
+
+          if (missingPanels.length > 0) {
+            // Insert session-result after schedule if missing
+            const newOrder = [...currentRightPanels];
+            missingPanels.forEach((panel) => {
+              if (panel === "session-result") {
+                const scheduleIdx = newOrder.indexOf("schedule");
+                if (scheduleIdx >= 0) {
+                  newOrder.splice(scheduleIdx + 1, 0, panel);
+                } else {
+                  newOrder.push(panel);
+                }
+              } else {
+                newOrder.push(panel);
+              }
+            });
+            useZenStore.setState({ rightPanelOrder: newOrder });
+          }
+        }
+      },
     }
   )
 );
