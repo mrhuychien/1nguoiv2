@@ -12,6 +12,9 @@ import {
   ChevronUp,
   Clock,
   CheckCircle2,
+  X,
+  Download,
+  ZoomIn,
 } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
 import { cn } from "@/lib/utils";
@@ -45,6 +48,7 @@ export function SessionResultPanel({ className }: SessionResultPanelProps) {
   const [notes, setNotes] = useState("");
   const [isExpanded, setIsExpanded] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [viewingFile, setViewingFile] = useState<SessionFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get today's work log entries
@@ -110,6 +114,24 @@ export function SessionResultPanel({ className }: SessionResultPanelProps) {
     if (!selectedEntry) return;
     const updatedFiles = (selectedEntry.files || []).filter((f) => f.id !== fileId);
     updateWorkLogEntry(selectedEntry.id, { files: updatedFiles });
+  };
+
+  const handleViewFile = (file: SessionFile) => {
+    if (file.type.startsWith("image/")) {
+      setViewingFile(file);
+    } else {
+      // Download non-image files
+      handleDownloadFile(file);
+    }
+  };
+
+  const handleDownloadFile = (file: SessionFile) => {
+    const link = document.createElement("a");
+    link.href = file.url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   if (todayEntries.length === 0) {
@@ -255,17 +277,29 @@ export function SessionResultPanel({ className }: SessionResultPanelProps) {
                           key={file.id}
                           className="group flex items-center gap-2 p-2 rounded-lg bg-gray-800/50 hover:bg-gray-800 transition-colors"
                         >
-                          {isImage ? (
-                            <img
-                              src={file.url}
-                              alt={file.name}
-                              className="w-10 h-10 rounded object-cover flex-shrink-0"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded bg-gray-700 flex items-center justify-center flex-shrink-0">
-                              <FileIcon className="w-5 h-5 text-gray-400" />
-                            </div>
-                          )}
+                          {/* Clickable thumbnail/icon */}
+                          <button
+                            onClick={() => handleViewFile(file)}
+                            className="relative flex-shrink-0 hover:opacity-80 transition-opacity"
+                            title={isImage ? "Xem ảnh" : "Tải xuống"}
+                          >
+                            {isImage ? (
+                              <>
+                                <img
+                                  src={file.url}
+                                  alt={file.name}
+                                  className="w-10 h-10 rounded object-cover"
+                                />
+                                <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                  <ZoomIn className="w-4 h-4 text-white" />
+                                </div>
+                              </>
+                            ) : (
+                              <div className="w-10 h-10 rounded bg-gray-700 flex items-center justify-center hover:bg-gray-600 transition-colors">
+                                <FileIcon className="w-5 h-5 text-gray-400" />
+                              </div>
+                            )}
+                          </button>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm text-white truncate" title={file.name}>
                               {file.name}
@@ -274,13 +308,22 @@ export function SessionResultPanel({ className }: SessionResultPanelProps) {
                               {formatFileSize(file.size)}
                             </p>
                           </div>
-                          <button
-                            onClick={() => handleRemoveFile(file.id)}
-                            className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/20 opacity-0 group-hover:opacity-100 transition-all"
-                            title="Xóa file"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            <button
+                              onClick={() => handleDownloadFile(file)}
+                              className="p-1 rounded text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/20"
+                              title="Tải xuống"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleRemoveFile(file.id)}
+                              className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/20"
+                              title="Xóa file"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
@@ -289,6 +332,48 @@ export function SessionResultPanel({ className }: SessionResultPanelProps) {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Image Viewer Modal */}
+      {viewingFile && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center animate-fade-in"
+          onClick={() => setViewingFile(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]">
+            {/* Close button */}
+            <button
+              onClick={() => setViewingFile(null)}
+              className="absolute -top-10 right-0 p-2 text-white/70 hover:text-white transition-colors"
+              title="Đóng"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Image */}
+            <img
+              src={viewingFile.url}
+              alt={viewingFile.name}
+              className="max-w-full max-h-[85vh] object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+
+            {/* File info */}
+            <div className="absolute -bottom-10 left-0 right-0 flex items-center justify-between text-sm text-white/70">
+              <span className="truncate max-w-[60%]">{viewingFile.name}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadFile(viewingFile);
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded hover:bg-white/10 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                <span>Tải xuống</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
