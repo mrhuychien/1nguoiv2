@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Play, Pause, Maximize2, GripHorizontal } from "lucide-react";
+import { X, Play, Pause, Maximize2, GripHorizontal, ExternalLink } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
 import { useProjectStore } from "@/store/project-store";
 import { cn } from "@/lib/utils";
@@ -101,6 +101,23 @@ export function DeepModeMini() {
     enterDeepWorkMode();
   };
 
+  const handlePopout = () => {
+    // Open mini timer in a small popup window
+    const width = 280;
+    const height = 380;
+    const left = window.screen.width - width - 20;
+    const top = 20;
+
+    window.open(
+      "/zen/mini",
+      "mini-timer",
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=no,status=no,menubar=no,toolbar=no,location=no`
+    );
+
+    // Close the inline mini timer
+    setShowMiniTimer(false);
+  };
+
   if (!showMiniTimer) return null;
 
   return (
@@ -125,6 +142,13 @@ export function DeepModeMini() {
           <span className="text-xs text-gray-400 font-medium">Focus Timer</span>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={handlePopout}
+            className="p-1 rounded hover:bg-gray-800 text-gray-500 hover:text-cyan-400 transition-colors"
+            title="Mở cửa sổ riêng"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
           <button
             onClick={handleExpandToFullscreen}
             className="p-1 rounded hover:bg-gray-800 text-gray-500 hover:text-white transition-colors"
