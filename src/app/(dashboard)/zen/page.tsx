@@ -73,6 +73,20 @@ export default function ZenPage() {
     }
   }, [user?.id, projectsInitialized, fetchAll]);
 
+  // Ensure session-result panel is in rightPanelOrder
+  useEffect(() => {
+    if (!rightPanelOrder.includes("session-result")) {
+      const newOrder = [...rightPanelOrder];
+      const scheduleIdx = newOrder.indexOf("schedule");
+      if (scheduleIdx >= 0) {
+        newOrder.splice(scheduleIdx + 1, 0, "session-result");
+      } else {
+        newOrder.unshift("session-result");
+      }
+      setRightPanelOrder(newOrder);
+    }
+  }, [rightPanelOrder, setRightPanelOrder]);
+
   const [isDragOver, setIsDragOver] = useState(false);
 
   // Find active project from unified store
