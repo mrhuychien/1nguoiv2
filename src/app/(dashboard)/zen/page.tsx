@@ -493,7 +493,7 @@ function KeyboardShortcuts() {
           break;
 
         case "KeyD":
-          if (!isDeepWorkMode && timerState !== "running") {
+          if (!isDeepWorkMode) {
             enterDeepWorkMode();
           }
           break;

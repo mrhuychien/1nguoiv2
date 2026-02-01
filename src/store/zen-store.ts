@@ -654,12 +654,15 @@ export const useZenStore = create<ZenStore>()(
       setFlowState: (flowState) => set({ flowState }),
 
       enterDeepWorkMode: () => {
+        const { timerState } = get();
         set({
           isDeepWorkMode: true,
           showDeepWorkOverlay: true,
         });
-        // Start timer automatically in deep work mode
-        get().startTimer();
+        // Start timer automatically in deep work mode if not already running
+        if (timerState !== "running") {
+          get().startTimer();
+        }
       },
 
       exitDeepWorkMode: () => {
