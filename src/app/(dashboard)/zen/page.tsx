@@ -15,7 +15,6 @@ import {
   NewProjectModal,
   SessionCompleteOverlay,
   DeepWorkOverlay,
-  DeepModeMini,
   WorkLogPanel,
   DraggablePanel,
   PanelContainer,
@@ -461,7 +460,6 @@ export default function ZenPage() {
       <NewProjectModal />
       <SessionCompleteOverlay />
       <DeepWorkOverlay />
-      <DeepModeMini />
 
       {/* Task Complete Dialog - shows for both task and free sessions */}
       {showTaskCompleteDialog && (
