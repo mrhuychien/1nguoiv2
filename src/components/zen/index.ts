@@ -16,3 +16,4 @@ export { DraggablePanel, PanelContainer } from "./draggable-panel";
 export { WorkReport } from "./work-report";
 export { ZenTaskManager } from "./zen-task-manager";
 export { SessionResultPanel } from "./session-result-panel";
+export { DeepModeMini } from "./deep-mode-mini";

@@ -78,6 +78,8 @@ interface ZenStoreState {
   showSessionComplete: boolean;
   showTaskCompleteDialog: boolean;
   showDeepWorkOverlay: boolean;
+  showMiniTimer: boolean;
+  miniTimerPosition: { x: number; y: number };
   showNewProjectModal: boolean;
   bellEnabled: boolean;
 }
@@ -167,6 +169,9 @@ interface ZenStoreActions {
   setShowSessionComplete: (show: boolean) => void;
   setShowTaskCompleteDialog: (show: boolean) => void;
   setShowDeepWorkOverlay: (show: boolean) => void;
+  setShowMiniTimer: (show: boolean) => void;
+  setMiniTimerPosition: (position: { x: number; y: number }) => void;
+  toggleMiniTimer: () => void;
   setShowNewProjectModal: (show: boolean) => void;
   toggleBell: () => void;
   ringBell: () => void;
@@ -225,6 +230,8 @@ const initialState: ZenStoreState = {
   showSessionComplete: false,
   showTaskCompleteDialog: false,
   showDeepWorkOverlay: false,
+  showMiniTimer: false,
+  miniTimerPosition: { x: 1000, y: 500 },
   showNewProjectModal: false,
   bellEnabled: true,
 };
@@ -836,6 +843,9 @@ export const useZenStore = create<ZenStore>()(
       setShowSessionComplete: (show) => set({ showSessionComplete: show }),
       setShowTaskCompleteDialog: (show) => set({ showTaskCompleteDialog: show }),
       setShowDeepWorkOverlay: (show) => set({ showDeepWorkOverlay: show }),
+      setShowMiniTimer: (show) => set({ showMiniTimer: show }),
+      setMiniTimerPosition: (position) => set({ miniTimerPosition: position }),
+      toggleMiniTimer: () => set((state) => ({ showMiniTimer: !state.showMiniTimer })),
       setShowNewProjectModal: (show) => set({ showNewProjectModal: show }),
 
       toggleBell: () => set((state) => ({ bellEnabled: !state.bellEnabled })),
@@ -901,6 +911,7 @@ export const useZenStore = create<ZenStore>()(
         workLog: state.workLog,
         centerPanelOrder: state.centerPanelOrder,
         rightPanelOrder: state.rightPanelOrder,
+        miniTimerPosition: state.miniTimerPosition,
       }),
       onRehydrateStorage: () => (state) => {
         // Migrate: ensure new panels are added to panel order

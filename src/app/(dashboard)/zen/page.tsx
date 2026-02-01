@@ -15,6 +15,7 @@ import {
   NewProjectModal,
   SessionCompleteOverlay,
   DeepWorkOverlay,
+  DeepModeMini,
   WorkLogPanel,
   DraggablePanel,
   PanelContainer,
@@ -441,6 +442,13 @@ export default function ZenPage() {
             <span className="text-gray-700">|</span>
             <span className="text-xs text-gray-400">
               <kbd className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-mono text-[10px]">
+                M
+              </kbd>{" "}
+              Mini Timer
+            </span>
+            <span className="text-gray-700">|</span>
+            <span className="text-xs text-gray-400">
+              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-mono text-[10px]">
                 N
               </kbd>{" "}
               New Task
@@ -453,6 +461,7 @@ export default function ZenPage() {
       <NewProjectModal />
       <SessionCompleteOverlay />
       <DeepWorkOverlay />
+      <DeepModeMini />
 
       {/* Task Complete Dialog - shows for both task and free sessions */}
       {showTaskCompleteDialog && (
@@ -482,6 +491,8 @@ function KeyboardShortcuts() {
     enterDeepWorkMode,
     isDeepWorkMode,
     setShowNewProjectModal,
+    toggleMiniTimer,
+    showMiniTimer,
   } = useZenStore();
 
   useEffect(() => {
@@ -512,6 +523,10 @@ function KeyboardShortcuts() {
           }
           break;
 
+        case "KeyM":
+          toggleMiniTimer();
+          break;
+
         case "KeyN":
           if (e.shiftKey) {
             setShowNewProjectModal(true);
@@ -530,6 +545,8 @@ function KeyboardShortcuts() {
     enterDeepWorkMode,
     isDeepWorkMode,
     setShowNewProjectModal,
+    toggleMiniTimer,
+    showMiniTimer,
   ]);
 
   return null;
