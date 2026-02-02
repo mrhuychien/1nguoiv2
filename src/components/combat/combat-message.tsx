@@ -63,6 +63,9 @@ export function CombatMessage({ message, isStreaming }: CombatMessageProps) {
 
   // Agent message
   if (agent) {
+    const totalTokens = message.tokens_input + message.tokens_output
+    const hasCostInfo = totalTokens > 0 || message.cost > 0
+
     return (
       <div className="flex gap-3 max-w-[85%]">
         <div
@@ -93,6 +96,22 @@ export function CombatMessage({ message, isStreaming }: CombatMessageProps) {
               <span className="inline-block w-2 h-4 bg-white/50 animate-pulse ml-1" />
             )}
           </div>
+          {/* Token and cost info */}
+          {hasCostInfo && !isStreaming && (
+            <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
+              <span title="Tokens (input + output)">
+                🎯 {totalTokens.toLocaleString()} tokens
+              </span>
+              <span title="Chi phí">
+                💰 ${message.cost.toFixed(4)}
+              </span>
+              {message.duration_ms > 0 && (
+                <span title="Thời gian xử lý">
+                  ⏱️ {(message.duration_ms / 1000).toFixed(1)}s
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     )

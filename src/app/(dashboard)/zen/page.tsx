@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, HelpCircle, Loader2, Target, X, CheckCircle2, RotateCcw } from "lucide-react";
+import { Settings, HelpCircle, Loader2, Target, X, CheckCircle2, RotateCcw, BarChart3 } from "lucide-react";
+import Link from "next/link";
 import {
   TimerRing,
   ZenBell,
@@ -17,6 +18,7 @@ import {
   WorkLogPanel,
   DraggablePanel,
   PanelContainer,
+  SessionResultPanel,
 } from "@/components/zen";
 import { useZenStore, getCurrentZone } from "@/store/zen-store";
 import { useProjectStore } from "@/store/project-store";
@@ -71,6 +73,20 @@ export default function ZenPage() {
     }
   }, [user?.id, projectsInitialized, fetchAll]);
 
+  // Ensure session-result panel is in rightPanelOrder
+  useEffect(() => {
+    if (!rightPanelOrder.includes("session-result")) {
+      const newOrder = [...rightPanelOrder];
+      const scheduleIdx = newOrder.indexOf("schedule");
+      if (scheduleIdx >= 0) {
+        newOrder.splice(scheduleIdx + 1, 0, "session-result");
+      } else {
+        newOrder.unshift("session-result");
+      }
+      setRightPanelOrder(newOrder);
+    }
+  }, [rightPanelOrder, setRightPanelOrder]);
+
   const [isDragOver, setIsDragOver] = useState(false);
 
   // Find active project from unified store
@@ -87,16 +103,32 @@ export default function ZenPage() {
       })()
     : null;
 
-  // Show task complete dialog when timer completes
+  // Auto-log and show dialog when timer completes
   useEffect(() => {
-    if (timerState === "completed" && currentTimerTaskId) {
+    if (timerState === "completed") {
+      // Always show the completion dialog (with or without task)
       setShowTaskCompleteDialog(true);
-      // Add time to the task
-      if (currentTimerTaskType === "template") {
+
+      // Add time to the task if one is selected
+      if (currentTimerTaskId && currentTimerTaskType === "template") {
         addTemplateTaskTimeInDb(currentTimerTaskId, timerTargetMinutes);
       }
+
+      // Auto-log the work entry immediately when timer completes
+      addWorkLogEntry({
+        taskId: currentTask?.id || "free-session",
+        taskTitle: currentTask?.title || "Phiên làm việc tự do",
+        taskEmoji: currentTask?.emoji,
+        projectId: activeProject?.id,
+        projectName: activeProject?.title,
+        projectColor: activeProject?.color || undefined,
+        durationMinutes: timerTargetMinutes,
+        status: "completed",
+        zone: currentZone || undefined,
+      });
     }
-  }, [timerState, currentTimerTaskId, currentTimerTaskType, timerTargetMinutes, addTemplateTaskTimeInDb, setShowTaskCompleteDialog]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timerState]);
 
   // Handle drag events for timer drop zone
   const handleDragOver = (e: React.DragEvent) => {
@@ -127,50 +159,29 @@ export default function ZenPage() {
     }
   };
 
-  // Log work entry helper
-  const logWorkEntry = (status: "completed" | "in_progress" | "paused") => {
-    if (!currentTask) return;
-
-    addWorkLogEntry({
-      taskId: currentTask.id,
-      taskTitle: currentTask.title,
-      taskEmoji: currentTask.emoji,
-      projectId: activeProject?.id,
-      projectName: activeProject?.title,
-      projectColor: activeProject?.color || undefined,
-      durationMinutes: timerTargetMinutes,
-      status,
-      zone: currentZone || undefined,
-    });
-  };
 
   // Handle task completion
   const handleCompleteTask = () => {
-    if (!currentTimerTaskId || !currentTimerTaskType) return;
-
-    // Log work entry
-    logWorkEntry("completed");
-
-    if (currentTimerTaskType === "template") {
-      completeTemplateTaskInDb(currentTimerTaskId);
-    } else {
-      // For manual tasks, update status to completed
-      updateTaskInDb(currentTimerTaskId, {
-        status: "completed",
-        completed: true,
-        completed_at: new Date().toISOString(),
-      });
+    // Complete task in DB if one is selected
+    if (currentTimerTaskId && currentTimerTaskType) {
+      if (currentTimerTaskType === "template") {
+        completeTemplateTaskInDb(currentTimerTaskId);
+      } else {
+        // For manual tasks, update status to completed
+        updateTaskInDb(currentTimerTaskId, {
+          status: "completed",
+          completed: true,
+          completed_at: new Date().toISOString(),
+        });
+      }
+      clearTimerTask();
     }
 
-    clearTimerTask();
     setShowTaskCompleteDialog(false);
   };
 
   // Handle continue working
   const handleContinueTask = () => {
-    // Log work entry as in_progress
-    logWorkEntry("in_progress");
-
     setShowTaskCompleteDialog(false);
     // Timer will be reset, user can start another session
   };
@@ -199,20 +210,17 @@ export default function ZenPage() {
 
   // Handle next phase - complete current task and move to next
   const handleNextPhase = () => {
-    if (!currentTimerTaskId || !currentTimerTaskType) return;
-
-    // Log work entry
-    logWorkEntry("completed");
-
-    // Complete current task
-    if (currentTimerTaskType === "template") {
-      completeTemplateTaskInDb(currentTimerTaskId);
-    } else {
-      updateTaskInDb(currentTimerTaskId, {
-        status: "completed",
-        completed: true,
-        completed_at: new Date().toISOString(),
-      });
+    // Complete current task in DB if one is selected
+    if (currentTimerTaskId && currentTimerTaskType) {
+      if (currentTimerTaskType === "template") {
+        completeTemplateTaskInDb(currentTimerTaskId);
+      } else {
+        updateTaskInDb(currentTimerTaskId, {
+          status: "completed",
+          completed: true,
+          completed_at: new Date().toISOString(),
+        });
+      }
     }
 
     // Start next task if available
@@ -261,6 +269,13 @@ export default function ZenPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <Link
+                href="/zen/report"
+                className="p-2.5 rounded-lg text-gray-400 hover:bg-gray-800/50 hover:text-white transition-colors"
+                title="Báo cáo làm việc"
+              >
+                <BarChart3 className="w-5 h-5" />
+              </Link>
               <ZenBell />
               <button className="p-2.5 rounded-lg text-gray-400 hover:bg-gray-800/50 hover:text-white transition-colors">
                 <HelpCircle className="w-5 h-5" />
@@ -384,7 +399,7 @@ export default function ZenPage() {
                 </PanelContainer>
               </div>
 
-              {/* Right sidebar - Schedule and Stats */}
+              {/* Right sidebar - Schedule, Results and Stats */}
               <aside className="col-span-12 lg:col-span-3">
                 <PanelContainer
                   panelOrder={rightPanelOrder}
@@ -392,6 +407,10 @@ export default function ZenPage() {
                 >
                   <DraggablePanel id="schedule">
                     <ZenSchedule />
+                  </DraggablePanel>
+
+                  <DraggablePanel id="session-result">
+                    <SessionResultPanel />
                   </DraggablePanel>
 
                   <DraggablePanel id="stats">
@@ -422,6 +441,13 @@ export default function ZenPage() {
             <span className="text-gray-700">|</span>
             <span className="text-xs text-gray-400">
               <kbd className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-mono text-[10px]">
+                M
+              </kbd>{" "}
+              Mini Timer
+            </span>
+            <span className="text-gray-700">|</span>
+            <span className="text-xs text-gray-400">
+              <kbd className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-mono text-[10px]">
                 N
               </kbd>{" "}
               New Task
@@ -435,10 +461,10 @@ export default function ZenPage() {
       <SessionCompleteOverlay />
       <DeepWorkOverlay />
 
-      {/* Task Complete Dialog */}
-      {showTaskCompleteDialog && currentTask && (
+      {/* Task Complete Dialog - shows for both task and free sessions */}
+      {showTaskCompleteDialog && (
         <TaskCompleteDialog
-          task={currentTask}
+          task={currentTask || { id: "free-session", title: "Phiên làm việc tự do", emoji: "⏱️" }}
           nextTask={nextTask}
           timeSpent={timerTargetMinutes}
           onComplete={handleCompleteTask}
@@ -463,6 +489,8 @@ function KeyboardShortcuts() {
     enterDeepWorkMode,
     isDeepWorkMode,
     setShowNewProjectModal,
+    toggleMiniTimer,
+    showMiniTimer,
   } = useZenStore();
 
   useEffect(() => {
@@ -488,9 +516,13 @@ function KeyboardShortcuts() {
           break;
 
         case "KeyD":
-          if (!isDeepWorkMode && timerState !== "running") {
+          if (!isDeepWorkMode) {
             enterDeepWorkMode();
           }
+          break;
+
+        case "KeyM":
+          toggleMiniTimer();
           break;
 
         case "KeyN":
@@ -511,6 +543,8 @@ function KeyboardShortcuts() {
     enterDeepWorkMode,
     isDeepWorkMode,
     setShowNewProjectModal,
+    toggleMiniTimer,
+    showMiniTimer,
   ]);
 
   return null;

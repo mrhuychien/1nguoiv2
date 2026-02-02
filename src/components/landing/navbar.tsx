@@ -11,6 +11,7 @@ import type { User } from "@supabase/supabase-js";
 const navLinks = [
   { href: "#pillars", label: "Tính năng" },
   { href: "#tools", label: "Công cụ" },
+  { href: "/combatfree", label: "Combat", isPage: true },
   { href: "#pricing", label: "Bảng giá" },
   { href: "#faq", label: "FAQ" },
 ];
@@ -55,15 +56,25 @@ export function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
-            {navLinks.map((link) => (
-              <a
-                key={link.href}
-                href={link.href}
-                className="text-sm text-text-secondary hover:text-text-primary transition-colors"
-              >
-                {link.label}
-              </a>
-            ))}
+            {navLinks.map((link) =>
+              'isPage' in link && link.isPage ? (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="text-sm text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  className="text-sm text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  {link.label}
+                </a>
+              )
+            )}
           </div>
 
           {/* Desktop CTA */}
@@ -110,16 +121,27 @@ export function Navbar() {
             className="md:hidden glass border-t border-border"
           >
             <div className="px-4 py-4 space-y-4">
-              {navLinks.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  className="block text-text-secondary hover:text-text-primary transition-colors py-2"
-                  onClick={() => setIsOpen(false)}
-                >
-                  {link.label}
-                </a>
-              ))}
+              {navLinks.map((link) =>
+                'isPage' in link && link.isPage ? (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="block text-text-secondary hover:text-text-primary transition-colors py-2"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    {link.label}
+                  </Link>
+                ) : (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    className="block text-text-secondary hover:text-text-primary transition-colors py-2"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    {link.label}
+                  </a>
+                )
+              )}
               <div className="pt-4 border-t border-border space-y-3">
                 {user ? (
                   <Button className="w-full" asChild>

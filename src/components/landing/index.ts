@@ -5,6 +5,7 @@ export { Phase2Section } from "./phase2-section";
 export { Phase3Section } from "./phase3-section";
 export { ToolsSection } from "./tools-section";
 export { AICouncilSection } from "./ai-council-section";
+export { CombatSection } from "./combat-section";
 export { CTASection } from "./cta-section";
 export { Footer } from "./footer";
 

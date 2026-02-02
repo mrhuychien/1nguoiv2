@@ -50,6 +50,8 @@ interface ZenStoreState {
   timerTargetMinutes: number;
   timerConfig: ZenTimerConfig;
   sessionsCompleted: number;
+  timerStartedAt: number | null; // Timestamp when timer started
+  timerPausedAt: number | null;  // Timestamp when timer was paused (to track pause duration)
 
   // Flow & Focus
   flowState: FlowState;
@@ -76,6 +78,8 @@ interface ZenStoreState {
   showSessionComplete: boolean;
   showTaskCompleteDialog: boolean;
   showDeepWorkOverlay: boolean;
+  showMiniTimer: boolean;
+  miniTimerPosition: { x: number; y: number };
   showNewProjectModal: boolean;
   bellEnabled: boolean;
 }
@@ -150,6 +154,8 @@ interface ZenStoreActions {
 
   // Work Log actions
   addWorkLogEntry: (entry: Omit<WorkLogEntry, "id" | "date" | "timestamp">) => void;
+  updateWorkLogEntry: (id: string, updates: Partial<WorkLogEntry>) => void;
+  getLatestWorkLogEntry: () => WorkLogEntry | null;
   getTodayWorkLog: () => WorkLogEntry[];
   getWorkLogByDate: (date: string) => WorkLogEntry[];
   clearWorkLog: () => void;
@@ -163,6 +169,9 @@ interface ZenStoreActions {
   setShowSessionComplete: (show: boolean) => void;
   setShowTaskCompleteDialog: (show: boolean) => void;
   setShowDeepWorkOverlay: (show: boolean) => void;
+  setShowMiniTimer: (show: boolean) => void;
+  setMiniTimerPosition: (position: { x: number; y: number }) => void;
+  toggleMiniTimer: () => void;
   setShowNewProjectModal: (show: boolean) => void;
   toggleBell: () => void;
   ringBell: () => void;
@@ -193,6 +202,8 @@ const initialState: ZenStoreState = {
   timerTargetMinutes: 25,
   timerConfig: DEFAULT_TIMER_CONFIG,
   sessionsCompleted: 0,
+  timerStartedAt: null,
+  timerPausedAt: null,
 
   flowState: "rest",
   isDeepWorkMode: false,
@@ -205,7 +216,7 @@ const initialState: ZenStoreState = {
 
   // Default panel order
   centerPanelOrder: ["garden", "worklog"],
-  rightPanelOrder: ["schedule", "stats"],
+  rightPanelOrder: ["schedule", "session-result", "stats"],
 
   stats: {
     todayMinutes: 0,
@@ -219,6 +230,8 @@ const initialState: ZenStoreState = {
   showSessionComplete: false,
   showTaskCompleteDialog: false,
   showDeepWorkOverlay: false,
+  showMiniTimer: false,
+  miniTimerPosition: { x: 1000, y: 500 },
   showNewProjectModal: false,
   bellEnabled: true,
 };
@@ -541,20 +554,44 @@ export const useZenStore = create<ZenStore>()(
         });
       },
 
-      // Timer actions
+      // Timer actions - using timestamps for accurate timing even when tab is in background
       startTimer: (minutes) => {
         const targetMinutes = minutes || get().timerTargetMinutes;
+        const now = Date.now();
         set({
           timerState: "running",
           timerSeconds: targetMinutes * 60,
           timerTargetMinutes: targetMinutes,
+          timerStartedAt: now,
+          timerPausedAt: null,
           flowState: "focus",
         });
       },
 
-      pauseTimer: () => set({ timerState: "paused" }),
+      pauseTimer: () => {
+        const now = Date.now();
+        set({
+          timerState: "paused",
+          timerPausedAt: now,
+        });
+      },
 
-      resumeTimer: () => set({ timerState: "running" }),
+      resumeTimer: () => {
+        const { timerStartedAt, timerPausedAt } = get();
+        const now = Date.now();
+
+        // Adjust start time to account for pause duration
+        if (timerStartedAt && timerPausedAt) {
+          const pauseDuration = now - timerPausedAt;
+          set({
+            timerState: "running",
+            timerStartedAt: timerStartedAt + pauseDuration,
+            timerPausedAt: null,
+          });
+        } else {
+          set({ timerState: "running", timerPausedAt: null });
+        }
+      },
 
       stopTimer: () => {
         const { timerTargetMinutes, timerSeconds } = get();
@@ -567,19 +604,28 @@ export const useZenStore = create<ZenStore>()(
         set({
           timerState: "idle",
           timerSeconds: 0,
+          timerStartedAt: null,
+          timerPausedAt: null,
           flowState: "rest",
         });
       },
 
       tickTimer: () => {
-        const { timerState, timerSeconds, bellEnabled } = get();
-        if (timerState !== "running") return;
+        const { timerState, timerStartedAt, timerTargetMinutes, bellEnabled } = get();
+        if (timerState !== "running" || !timerStartedAt) return;
 
-        if (timerSeconds <= 1) {
+        const now = Date.now();
+        const totalSeconds = timerTargetMinutes * 60;
+        const elapsedSeconds = Math.floor((now - timerStartedAt) / 1000);
+        const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
+
+        if (remainingSeconds <= 0) {
           // Timer completed
           set({
             timerState: "completed",
             timerSeconds: 0,
+            timerStartedAt: null,
+            timerPausedAt: null,
             sessionsCompleted: get().sessionsCompleted + 1,
             showSessionComplete: true,
             flowState: "rest",
@@ -590,12 +636,12 @@ export const useZenStore = create<ZenStore>()(
           }
         } else {
           // Check for flow state transition (after 10 minutes of focus)
-          const elapsedMinutes = get().timerTargetMinutes - Math.floor(timerSeconds / 60);
+          const elapsedMinutes = Math.floor(elapsedSeconds / 60);
           if (elapsedMinutes >= 10 && get().flowState === "focus") {
             set({ flowState: "flow" });
           }
 
-          set({ timerSeconds: timerSeconds - 1 });
+          set({ timerSeconds: remainingSeconds });
         }
       },
 
@@ -603,6 +649,8 @@ export const useZenStore = create<ZenStore>()(
         set({
           timerState: "idle",
           timerSeconds: 0,
+          timerStartedAt: null,
+          timerPausedAt: null,
           flowState: "rest",
         });
       },
@@ -613,20 +661,23 @@ export const useZenStore = create<ZenStore>()(
       setFlowState: (flowState) => set({ flowState }),
 
       enterDeepWorkMode: () => {
+        const { timerState } = get();
         set({
           isDeepWorkMode: true,
           showDeepWorkOverlay: true,
         });
-        // Start timer automatically in deep work mode
-        get().startTimer();
+        // Start timer automatically in deep work mode if not already running
+        if (timerState !== "running") {
+          get().startTimer();
+        }
       },
 
       exitDeepWorkMode: () => {
+        // Only toggle overlay, timer continues running
         set({
           isDeepWorkMode: false,
           showDeepWorkOverlay: false,
         });
-        get().stopTimer();
       },
 
       // Schedule actions
@@ -746,6 +797,19 @@ export const useZenStore = create<ZenStore>()(
         }));
       },
 
+      updateWorkLogEntry: (id, updates) => {
+        set((state) => ({
+          workLog: state.workLog.map((entry) =>
+            entry.id === id ? { ...entry, ...updates } : entry
+          ),
+        }));
+      },
+
+      getLatestWorkLogEntry: () => {
+        const { workLog } = get();
+        return workLog.length > 0 ? workLog[0] : null;
+      },
+
       getTodayWorkLog: () => {
         const today = new Date().toISOString().split("T")[0];
         return get().workLog.filter((entry) => entry.date === today);
@@ -771,7 +835,7 @@ export const useZenStore = create<ZenStore>()(
       resetPanelOrder: () => {
         set({
           centerPanelOrder: ["garden", "worklog"],
-          rightPanelOrder: ["schedule", "stats"],
+          rightPanelOrder: ["schedule", "session-result", "stats"],
         });
       },
 
@@ -779,6 +843,9 @@ export const useZenStore = create<ZenStore>()(
       setShowSessionComplete: (show) => set({ showSessionComplete: show }),
       setShowTaskCompleteDialog: (show) => set({ showTaskCompleteDialog: show }),
       setShowDeepWorkOverlay: (show) => set({ showDeepWorkOverlay: show }),
+      setShowMiniTimer: (show) => set({ showMiniTimer: show }),
+      setMiniTimerPosition: (position) => set({ miniTimerPosition: position }),
+      toggleMiniTimer: () => set((state) => ({ showMiniTimer: !state.showMiniTimer })),
       setShowNewProjectModal: (show) => set({ showNewProjectModal: show }),
 
       toggleBell: () => set((state) => ({ bellEnabled: !state.bellEnabled })),
@@ -844,7 +911,38 @@ export const useZenStore = create<ZenStore>()(
         workLog: state.workLog,
         centerPanelOrder: state.centerPanelOrder,
         rightPanelOrder: state.rightPanelOrder,
+        miniTimerPosition: state.miniTimerPosition,
       }),
+      onRehydrateStorage: () => (state) => {
+        // Migrate: ensure new panels are added to panel order
+        if (state) {
+          const requiredRightPanels = ["schedule", "session-result", "stats"];
+          const currentRightPanels = state.rightPanelOrder || [];
+
+          // Add missing panels
+          const missingPanels = requiredRightPanels.filter(
+            (p) => !currentRightPanels.includes(p)
+          );
+
+          if (missingPanels.length > 0) {
+            // Insert session-result after schedule if missing
+            const newOrder = [...currentRightPanels];
+            missingPanels.forEach((panel) => {
+              if (panel === "session-result") {
+                const scheduleIdx = newOrder.indexOf("schedule");
+                if (scheduleIdx >= 0) {
+                  newOrder.splice(scheduleIdx + 1, 0, panel);
+                } else {
+                  newOrder.push(panel);
+                }
+              } else {
+                newOrder.push(panel);
+              }
+            });
+            useZenStore.setState({ rightPanelOrder: newOrder });
+          }
+        }
+      },
     }
   )
 );

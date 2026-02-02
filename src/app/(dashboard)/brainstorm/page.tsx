@@ -1,16 +1,19 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { NewSessionDialog, SessionCard, SessionDetail } from "@/components/brainstorm";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Brain } from "lucide-react";
 import type { BrainstormSession } from "@/lib/types/brainstorm";
 import { AGENTS } from "@/lib/types/brainstorm";
+import { useSubscription } from "@/hooks/use-subscription";
+import { ProFeatureGate } from "@/components/ui/upgrade-prompt";
 
 function BrainstormPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { isPro, isLoading: subscriptionLoading } = useSubscription();
 
   // Get project info from URL params
   const projectId = searchParams.get("projectId");
@@ -22,8 +25,12 @@ function BrainstormPageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [startingSessionId, setStartingSessionId] = useState<string | null>(null);
 
-  // Fetch sessions
-  const fetchSessions = async () => {
+  // Fetch sessions only if user is PRO
+  const fetchSessions = useCallback(async () => {
+    if (!isPro) {
+      setIsLoading(false);
+      return;
+    }
     try {
       const response = await fetch("/api/brainstorm");
       const data = await response.json();
@@ -35,11 +42,13 @@ function BrainstormPageContent() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [isPro]);
 
   useEffect(() => {
-    fetchSessions();
-  }, []);
+    if (isPro) {
+      fetchSessions();
+    }
+  }, [isPro, fetchSessions]);
 
   const handleSessionCreated = (session: { id: string }) => {
     fetchSessions();
@@ -79,95 +88,100 @@ function BrainstormPageContent() {
     }
   };
 
-  // Show session detail view
-  if (selectedSessionId) {
-    return (
-      <div className="p-4 md:p-6">
-        <SessionDetail
-          sessionId={selectedSessionId}
-          onBack={() => {
-            setSelectedSessionId(null);
-            fetchSessions();
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
-    <div className="p-4 md:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Brainstorm</h1>
-          <p className="text-muted-foreground">
-            Let 4 AI agents analyze your ideas
-          </p>
+    <ProFeatureGate
+      isPro={isPro}
+      isLoading={subscriptionLoading}
+      feature="Brainstorm"
+      description="4 AI agents phân tích ý tưởng của bạn từ nhiều góc nhìn: Technical, Business, Creative và Critical."
+    >
+      {/* Show session detail view */}
+      {selectedSessionId ? (
+        <div className="p-4 md:p-6">
+          <SessionDetail
+            sessionId={selectedSessionId}
+            onBack={() => {
+              setSelectedSessionId(null);
+              fetchSessions();
+            }}
+          />
         </div>
-        <NewSessionDialog
-          onSessionCreated={handleSessionCreated}
-          projectId={projectId || undefined}
-          projectTitle={projectTitle || undefined}
-          projectDescription={projectDescription || undefined}
-        />
-      </div>
-
-      {/* Agents Overview */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {Object.values(AGENTS).map((agent) => (
-          <Card key={agent.id}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0"
-                style={{ backgroundColor: agent.color + "20" }}
-              >
-                {agent.icon}
-              </div>
-              <div className="min-w-0">
-                <p className="font-semibold truncate">{agent.name}</p>
-                <p className="text-xs text-muted-foreground truncate">{agent.description}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Sessions List */}
-      {isLoading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      ) : sessions.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center h-64 text-center">
-            <Brain className="h-16 w-16 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No brainstorm sessions yet</h3>
-            <p className="text-muted-foreground mb-4">
-              Create your first session to get AI-powered idea analysis
-            </p>
+      ) : (
+        <div className="p-4 md:p-6 space-y-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold">Brainstorm</h1>
+              <p className="text-muted-foreground">
+                Let 4 AI agents analyze your ideas
+              </p>
+            </div>
             <NewSessionDialog
               onSessionCreated={handleSessionCreated}
               projectId={projectId || undefined}
               projectTitle={projectTitle || undefined}
               projectDescription={projectDescription || undefined}
             />
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sessions.map((session) => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              isStarting={startingSessionId === session.id}
-              onStart={() => handleStartSession(session.id)}
-              onView={() => setSelectedSessionId(session.id)}
-              onDelete={() => handleDeleteSession(session.id)}
-            />
-          ))}
+          </div>
+
+          {/* Agents Overview */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Object.values(AGENTS).map((agent) => (
+              <Card key={agent.id}>
+                <CardContent className="p-4 flex items-center gap-3">
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-2xl flex-shrink-0"
+                    style={{ backgroundColor: agent.color + "20" }}
+                  >
+                    {agent.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold truncate">{agent.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{agent.description}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Sessions List */}
+          {isLoading ? (
+            <div className="flex items-center justify-center h-64">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : sessions.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center h-64 text-center">
+                <Brain className="h-16 w-16 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No brainstorm sessions yet</h3>
+                <p className="text-muted-foreground mb-4">
+                  Create your first session to get AI-powered idea analysis
+                </p>
+                <NewSessionDialog
+                  onSessionCreated={handleSessionCreated}
+                  projectId={projectId || undefined}
+                  projectTitle={projectTitle || undefined}
+                  projectDescription={projectDescription || undefined}
+                />
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sessions.map((session) => (
+                <SessionCard
+                  key={session.id}
+                  session={session}
+                  isStarting={startingSessionId === session.id}
+                  onStart={() => handleStartSession(session.id)}
+                  onView={() => setSelectedSessionId(session.id)}
+                  onDelete={() => handleDeleteSession(session.id)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
-    </div>
+    </ProFeatureGate>
   );
 }
 

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, Coffee, Sparkles, Target, ArrowRight } from "lucide-react";
+import { X, Coffee, Play, Pause, CheckCircle2, ArrowRight } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
+import { useProjectStore } from "@/store/project-store";
 import { BellAnimation } from "./zen-bell";
 import { cn } from "@/lib/utils";
 
@@ -154,17 +155,28 @@ export function SessionCompleteOverlay() {
 export function DeepWorkOverlay() {
   const {
     showDeepWorkOverlay,
-    setShowDeepWorkOverlay,
     exitDeepWorkMode,
     activeProjectId,
-    projects,
     timerState,
     timerSeconds,
     timerTargetMinutes,
-    flowState,
+    startTimer,
+    pauseTimer,
+    resumeTimer,
+    setTimerTarget,
+    currentTimerTaskId,
+    currentTimerTaskType,
+    clearTimerTask,
   } = useZenStore();
 
+  const { projects, tasks, completeTemplateTask, updateTaskInDb } = useProjectStore();
+
   const activeProject = projects.find((p) => p.id === activeProjectId);
+
+  // Get current task
+  const currentTask = currentTimerTaskId
+    ? tasks.find((t) => t.id === currentTimerTaskId)
+    : null;
 
   if (!showDeepWorkOverlay) return null;
 
@@ -174,127 +186,188 @@ export function DeepWorkOverlay() {
 
   const handleExit = () => {
     exitDeepWorkMode();
-    setShowDeepWorkOverlay(false);
   };
 
+  const handlePlayPause = () => {
+    if (timerState === "running") {
+      pauseTimer();
+    } else if (timerState === "paused") {
+      resumeTimer();
+    } else {
+      startTimer();
+    }
+  };
+
+  const handleCompleteTask = () => {
+    if (currentTimerTaskId && currentTimerTaskType) {
+      if (currentTimerTaskType === "template") {
+        completeTemplateTask(currentTimerTaskId);
+      } else {
+        updateTaskInDb(currentTimerTaskId, {
+          status: "completed",
+          completed: true,
+          completed_at: new Date().toISOString(),
+        });
+      }
+      clearTimerTask();
+    }
+  };
+
+  const handleClearTask = () => {
+    clearTimerTask();
+  };
+
+  const handleTimePreset = (minutes: number) => {
+    setTimerTarget(minutes);
+    if (timerState === "idle") {
+      startTimer(minutes);
+    }
+  };
+
+  const TIME_PRESETS = [15, 25, 45, 60];
+
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center animate-fade-in">
-      {/* Ambient glow */}
-      <div
-        className={cn(
-          "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full blur-[150px] transition-colors duration-1000",
-          flowState === "flow"
-            ? "bg-green-500/20"
-            : flowState === "focus"
-            ? "bg-cyan-500/20"
-            : "bg-gray-500/10"
-        )}
-      />
-
+    <div className="fixed inset-0 z-50 bg-[#0a0a0f] flex flex-col items-center justify-center animate-fade-in">
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center">
-        {/* Flow state indicator */}
-        <div
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-full mb-8 transition-all",
-            flowState === "flow"
-              ? "bg-green-500/20 text-green-400 animate-flow-glow"
-              : flowState === "focus"
-              ? "bg-cyan-500/20 text-cyan-400"
-              : "bg-gray-500/20 text-gray-400"
-          )}
-        >
-          {flowState === "flow" ? (
-            <Sparkles className="w-4 h-4" />
-          ) : (
-            <Target className="w-4 h-4" />
-          )}
-          <span className="text-sm font-medium uppercase tracking-wider">
-            {flowState === "flow"
-              ? "In Flow"
-              : flowState === "focus"
-              ? "Focusing"
-              : "Ready"}
-          </span>
-        </div>
-
-        {/* Timer display */}
-        <div className="relative mb-8">
-          {/* Ring */}
-          <svg width="280" height="280" className="transform -rotate-90">
-            <circle
-              cx="140"
-              cy="140"
-              r="130"
-              stroke="currentColor"
-              strokeWidth="4"
-              fill="none"
-              className="text-gray-800/50"
+      <div className="relative z-10 flex flex-col items-center w-full max-w-md px-4">
+        {/* Project badge */}
+        {activeProject && (
+          <div
+            className="flex items-center gap-2 px-4 py-2 rounded-full mb-6"
+            style={{ backgroundColor: `${activeProject.color}15` }}
+          >
+            <div
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ backgroundColor: activeProject.color }}
             />
+            <span
+              className="text-sm font-medium"
+              style={{ color: activeProject.color }}
+            >
+              {activeProject.title}
+            </span>
+          </div>
+        )}
+
+        {/* Current Task */}
+        {currentTask ? (
+          <div className="flex items-center gap-2 px-4 py-2.5 mb-8 rounded-xl bg-gray-800/50 border border-gray-700 animate-zen-fade">
+            <button
+              onClick={handleCompleteTask}
+              className="text-cyan-400 hover:text-green-400 transition-colors"
+              title="Hoàn thành task"
+            >
+              <CheckCircle2 className="w-5 h-5" />
+            </button>
+            {currentTask.emoji && (
+              <span className="text-base">{currentTask.emoji}</span>
+            )}
+            <span className="text-sm font-medium text-white max-w-[200px] truncate" title={currentTask.title}>
+              {currentTask.title}
+            </span>
+            <button
+              onClick={handleClearTask}
+              className="p-1 rounded-full hover:bg-gray-700 text-gray-400 hover:text-white transition-colors ml-1"
+              title="Gỡ task"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 px-4 py-2.5 mb-8 rounded-xl border border-dashed border-gray-700 text-gray-500">
+            <span className="text-sm">Không có task được chọn</span>
+          </div>
+        )}
+
+        {/* Timer Ring */}
+        <div className="relative mb-8">
+          <svg width="280" height="280" className="transform -rotate-90">
+            {/* Background circle */}
             <circle
               cx="140"
               cy="140"
-              r="130"
-              strokeWidth="4"
+              r="120"
+              stroke="currentColor"
+              strokeWidth="3"
+              fill="none"
+              className="text-gray-800"
+            />
+            {/* Progress circle */}
+            <circle
+              cx="140"
+              cy="140"
+              r="120"
+              strokeWidth="3"
               fill="none"
               strokeLinecap="round"
               className={cn(
                 "transition-all duration-300",
-                flowState === "flow"
-                  ? "stroke-green-500"
-                  : flowState === "focus"
+                timerState === "running"
                   ? "stroke-cyan-500"
-                  : "stroke-gray-500"
+                  : timerState === "paused"
+                  ? "stroke-yellow-500"
+                  : "stroke-gray-600"
               )}
               style={{
-                strokeDasharray: 130 * 2 * Math.PI,
-                strokeDashoffset: 130 * 2 * Math.PI * (1 - progress),
+                strokeDasharray: 120 * 2 * Math.PI,
+                strokeDashoffset: 120 * 2 * Math.PI * (1 - progress),
               }}
             />
           </svg>
 
           {/* Time display */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span
-              className={cn(
-                "text-6xl font-mono font-bold text-white",
-                timerState === "running" &&
-                  flowState === "flow" &&
-                  "animate-timer-pulse"
-              )}
-            >
+            <span className="text-5xl font-light text-white tracking-wider">
               {Math.floor(timerSeconds / 60)
                 .toString()
                 .padStart(2, "0")}
-              :
+              <span className="text-gray-400 mx-1">:</span>
               {(timerSeconds % 60).toString().padStart(2, "0")}
             </span>
-            {activeProject && (
-              <span className="text-sm text-gray-400 mt-2">
-                {activeProject.name}
-              </span>
-            )}
           </div>
         </div>
 
-        {/* Breathing guide */}
-        <div
+        {/* Play/Pause Button */}
+        <button
+          onClick={handlePlayPause}
           className={cn(
-            "w-4 h-4 rounded-full mb-8",
-            flowState === "flow"
-              ? "bg-green-400 animate-breathe"
-              : flowState === "focus"
-              ? "bg-cyan-400 animate-breathe"
-              : "bg-gray-400"
+            "w-14 h-14 rounded-full flex items-center justify-center mb-6 transition-all",
+            timerState === "running"
+              ? "bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400"
+              : "bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400"
           )}
-        />
+        >
+          {timerState === "running" ? (
+            <Pause className="w-6 h-6 text-white" />
+          ) : (
+            <Play className="w-6 h-6 text-white ml-1" />
+          )}
+        </button>
+
+        {/* Time Presets */}
+        <div className="flex items-center gap-2 mb-8">
+          {TIME_PRESETS.map((minutes) => (
+            <button
+              key={minutes}
+              onClick={() => handleTimePreset(minutes)}
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-medium transition-all",
+                timerTargetMinutes === minutes
+                  ? "bg-gray-700 text-white border border-gray-600"
+                  : "bg-transparent text-gray-500 hover:text-white hover:bg-gray-800/50 border border-transparent"
+              )}
+            >
+              {minutes}m
+            </button>
+          ))}
+        </div>
 
         {/* Exit button */}
         <button
           onClick={handleExit}
-          className="px-6 py-3 text-sm text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-full transition-colors"
+          className="px-6 py-2.5 text-sm text-gray-500 hover:text-white hover:bg-gray-800/50 rounded-full transition-colors"
         >
-          Thoát Deep Work (ESC)
+          Thoát (ESC)
         </button>
       </div>
 

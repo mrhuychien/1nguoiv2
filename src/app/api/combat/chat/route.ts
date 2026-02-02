@@ -111,8 +111,9 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorText = await response.text()
       console.error(`${agentConfig.provider} API error:`, response.status, errorText)
+      console.error(`Model: ${agentConfig.model}, Provider: ${agentConfig.provider}`)
       return new Response(JSON.stringify({
-        error: `${agentInfo.name} gặp lỗi khi xử lý`,
+        error: `${agentInfo.name} gặp lỗi khi xử lý (${response.status})`,
         details: errorText
       }), {
         status: 500,
@@ -291,6 +292,7 @@ function createTransformStream(
   let fullContent = ''
   let tokensInput = 0
   let tokensOutput = 0
+  let doneSent = false
 
   return new TransformStream({
     transform(chunk, controller) {
@@ -301,7 +303,10 @@ function createTransformStream(
         if (line.startsWith('data: ')) {
           const data = line.slice(6)
           if (data === '[DONE]') {
-            controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+            if (!doneSent) {
+              doneSent = true
+              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+            }
             continue
           }
 
@@ -320,7 +325,8 @@ function createTransformStream(
               if (parsed.type === 'message_start' && parsed.message?.usage) {
                 tokensInput = parsed.message.usage.input_tokens || 0
               }
-              if (parsed.type === 'message_stop') {
+              if (parsed.type === 'message_stop' && !doneSent) {
+                doneSent = true
                 controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
               }
             } else if (provider === 'openai' || provider === 'xai') {
@@ -331,6 +337,11 @@ function createTransformStream(
                 tokensInput = parsed.usage.prompt_tokens || 0
                 tokensOutput = parsed.usage.completion_tokens || 0
               }
+              // OpenAI/xAI signals end with finish_reason
+              if (parsed.choices?.[0]?.finish_reason === 'stop' && !doneSent) {
+                doneSent = true
+                controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+              }
             } else if (provider === 'google') {
               if (parsed.candidates?.[0]?.content?.parts?.[0]?.text) {
                 content = parsed.candidates[0].content.parts[0].text
@@ -338,6 +349,11 @@ function createTransformStream(
               if (parsed.usageMetadata) {
                 tokensInput = parsed.usageMetadata.promptTokenCount || 0
                 tokensOutput = parsed.usageMetadata.candidatesTokenCount || 0
+              }
+              // Google signals end with finishReason
+              if (parsed.candidates?.[0]?.finishReason === 'STOP' && !doneSent) {
+                doneSent = true
+                controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
               }
             }
 

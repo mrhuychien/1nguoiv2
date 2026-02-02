@@ -13,12 +13,6 @@ interface DeepWorkZoneProps {
 }
 
 // Helper functions to calculate real stats
-function getStartOfDay(): Date {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return now;
-}
-
 function getStartOfWeek(): Date {
   const now = new Date();
   const dayOfWeek = now.getDay();
@@ -28,6 +22,10 @@ function getStartOfWeek(): Date {
   return now;
 }
 
+function getDateString(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
+
 export function DeepWorkZone({ className }: DeepWorkZoneProps) {
   const {
     isDeepWorkMode,
@@ -35,6 +33,7 @@ export function DeepWorkZone({ className }: DeepWorkZoneProps) {
     timerState,
     activeProjectId,
     sessionsCompleted,
+    workLog,
   } = useZenStore();
 
   const {
@@ -53,40 +52,50 @@ export function DeepWorkZone({ className }: DeepWorkZoneProps) {
     ? getCurrentTemplateTask(activeProject.id)
     : null;
 
-  // Calculate real stats from task data
+  // Calculate real stats from workLog (accurate per-session tracking)
   const stats = useMemo(() => {
-    const startOfDay = getStartOfDay();
     const startOfWeek = getStartOfWeek();
+    const todayStr = getDateString(new Date());
 
-    // Calculate minutes from tasks with actual_minutes
+    // Calculate minutes from workLog entries (accurate tracking)
     let todayMinutes = 0;
     let weekMinutes = 0;
     let tasksCompletedThisWeek = 0;
+    const daysWithWork = new Set<string>();
 
-    tasks.forEach((task) => {
-      const actualMinutes = task.actual_minutes || 0;
-      const updatedAt = task.updated_at ? new Date(task.updated_at) : null;
-      const completedAt = task.completed_at ? new Date(task.completed_at) : null;
+    workLog.forEach((entry) => {
+      const entryDate = new Date(entry.timestamp);
 
-      // For tasks with actual_minutes, check when they were last updated
-      if (actualMinutes > 0 && updatedAt) {
-        if (updatedAt >= startOfDay) {
-          todayMinutes += actualMinutes;
-        }
-        if (updatedAt >= startOfWeek) {
-          weekMinutes += actualMinutes;
-        }
+      // Today's minutes
+      if (entry.date === todayStr) {
+        todayMinutes += entry.durationMinutes;
       }
 
-      // Count completed tasks this week
-      if (task.completed && completedAt && completedAt >= startOfWeek) {
-        tasksCompletedThisWeek++;
+      // This week's minutes
+      if (entryDate >= startOfWeek) {
+        weekMinutes += entry.durationMinutes;
+        daysWithWork.add(entry.date);
+
+        // Count completed tasks this week
+        if (entry.status === "completed") {
+          tasksCompletedThisWeek++;
+        }
       }
     });
 
-    // Calculate streak based on consecutive days with work
-    // For simplicity, we'll estimate based on sessionsCompleted
-    const streak = Math.min(Math.floor(sessionsCompleted / 2), 30);
+    // Also count completed tasks from database for this week (in case workLog is empty)
+    if (tasksCompletedThisWeek === 0) {
+      tasks.forEach((task) => {
+        const completedAt = task.completed_at ? new Date(task.completed_at) : null;
+        if (task.completed && completedAt && completedAt >= startOfWeek) {
+          tasksCompletedThisWeek++;
+        }
+      });
+    }
+
+    // Calculate streak based on consecutive days with work entries
+    // Count how many days this week had work
+    const streak = daysWithWork.size > 0 ? daysWithWork.size : Math.min(Math.floor(sessionsCompleted / 2), 7);
 
     return {
       todayMinutes,
@@ -96,7 +105,7 @@ export function DeepWorkZone({ className }: DeepWorkZoneProps) {
       tasksCompleted: tasksCompletedThisWeek,
       projectsActive: projects.filter((p) => p.status === "active").length,
     };
-  }, [tasks, projects, sessionsCompleted]);
+  }, [workLog, tasks, projects, sessionsCompleted]);
 
   // Calculate daily goal progress (8 hours = 480 minutes)
   const dailyGoalMinutes = 480;

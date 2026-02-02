@@ -9,9 +9,15 @@ import {
   History,
   ChevronDown,
   ChevronUp,
+  FileText,
+  Paperclip,
+  File,
+  X,
+  Download,
+  ZoomIn,
 } from "lucide-react";
 import { useZenStore } from "@/store/zen-store";
-import { WorkLogEntry } from "@/types/zen";
+import { WorkLogEntry, SessionFile } from "@/types/zen";
 import { cn } from "@/lib/utils";
 
 interface WorkLogPanelProps {
@@ -62,8 +68,26 @@ const STATUS_CONFIG = {
 export function WorkLogPanel({ className }: WorkLogPanelProps) {
   const { getTodayWorkLog } = useZenStore();
   const [isExpanded, setIsExpanded] = useState(true);
+  const [viewingFile, setViewingFile] = useState<SessionFile | null>(null);
 
   const todayLog = getTodayWorkLog();
+
+  const handleViewFile = (file: SessionFile) => {
+    if (file.type.startsWith("image/")) {
+      setViewingFile(file);
+    } else {
+      handleDownloadFile(file);
+    }
+  };
+
+  const handleDownloadFile = (file: SessionFile) => {
+    const link = document.createElement("a");
+    link.href = file.url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Calculate today's total time
   const totalMinutes = todayLog.reduce((sum, entry) => sum + entry.durationMinutes, 0);
@@ -123,9 +147,55 @@ export function WorkLogPanel({ className }: WorkLogPanelProps) {
             </div>
           ) : (
             todayLog.map((entry) => (
-              <WorkLogEntryCard key={entry.id} entry={entry} />
+              <WorkLogEntryCard
+                key={entry.id}
+                entry={entry}
+                onViewFile={handleViewFile}
+              />
             ))
           )}
+        </div>
+      )}
+
+      {/* Image Viewer Modal */}
+      {viewingFile && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center animate-fade-in"
+          onClick={() => setViewingFile(null)}
+        >
+          <div className="relative max-w-[90vw] max-h-[90vh]">
+            {/* Close button */}
+            <button
+              onClick={() => setViewingFile(null)}
+              className="absolute -top-10 right-0 p-2 text-white/70 hover:text-white transition-colors"
+              title="Đóng"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Image */}
+            <img
+              src={viewingFile.url}
+              alt={viewingFile.name}
+              className="max-w-full max-h-[85vh] object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
+
+            {/* File info */}
+            <div className="absolute -bottom-10 left-0 right-0 flex items-center justify-between text-sm text-white/70">
+              <span className="truncate max-w-[60%]">{viewingFile.name}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDownloadFile(viewingFile);
+                }}
+                className="flex items-center gap-1 px-2 py-1 rounded hover:bg-white/10 transition-colors"
+              >
+                <Download className="w-4 h-4" />
+                <span>Tải xuống</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -133,9 +203,16 @@ export function WorkLogPanel({ className }: WorkLogPanelProps) {
 }
 
 // Work log entry card
-function WorkLogEntryCard({ entry }: { entry: WorkLogEntry }) {
+interface WorkLogEntryCardProps {
+  entry: WorkLogEntry;
+  onViewFile: (file: SessionFile) => void;
+}
+
+function WorkLogEntryCard({ entry, onViewFile }: WorkLogEntryCardProps) {
   const status = STATUS_CONFIG[entry.status];
   const StatusIcon = status.icon;
+  const hasNotes = entry.notes && entry.notes.trim().length > 0;
+  const hasFiles = entry.files && entry.files.length > 0;
 
   return (
     <div className="p-3 rounded-lg bg-gray-900/50 border border-gray-800 hover:bg-gray-800/50 transition-colors">
@@ -156,7 +233,7 @@ function WorkLogEntryCard({ entry }: { entry: WorkLogEntry }) {
             {entry.taskEmoji && (
               <span className="text-sm">{entry.taskEmoji}</span>
             )}
-            <p className="text-sm font-medium text-white truncate">
+            <p className="text-sm font-medium text-white truncate" title={entry.taskTitle}>
               {entry.taskTitle}
             </p>
           </div>
@@ -196,7 +273,69 @@ function WorkLogEntryCard({ entry }: { entry: WorkLogEntry }) {
                 {entry.zone === "morning" ? "Sáng" : entry.zone === "afternoon" ? "Chiều" : "Tối"}
               </span>
             )}
+
+            {/* Notes indicator */}
+            {hasNotes && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 flex items-center gap-1">
+                <FileText className="w-3 h-3" />
+                Ghi chú
+              </span>
+            )}
+
+            {/* Files indicator */}
+            {hasFiles && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-400 flex items-center gap-1">
+                <Paperclip className="w-3 h-3" />
+                {entry.files!.length} file
+              </span>
+            )}
           </div>
+
+          {/* Notes preview */}
+          {hasNotes && (
+            <div className="mt-2 p-2 rounded bg-gray-800/50 border border-gray-700">
+              <p className="text-xs text-gray-400 line-clamp-2">{entry.notes}</p>
+            </div>
+          )}
+
+          {/* Files preview */}
+          {hasFiles && (
+            <div className="mt-2 flex gap-1.5 flex-wrap">
+              {entry.files!.slice(0, 3).map((file) => {
+                const isImage = file.type.startsWith("image/");
+                return (
+                  <button
+                    key={file.id}
+                    onClick={() => onViewFile(file)}
+                    className="relative group"
+                    title={isImage ? "Xem ảnh" : "Tải xuống"}
+                  >
+                    {isImage ? (
+                      <>
+                        <img
+                          src={file.url}
+                          alt={file.name}
+                          className="w-10 h-10 rounded object-cover border border-gray-700"
+                        />
+                        <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <ZoomIn className="w-4 h-4 text-white" />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="w-10 h-10 rounded bg-gray-700 flex items-center justify-center border border-gray-600 hover:bg-gray-600 transition-colors">
+                        <File className="w-4 h-4 text-gray-400" />
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+              {entry.files!.length > 3 && (
+                <div className="w-10 h-10 rounded bg-gray-700 flex items-center justify-center border border-gray-600 text-xs text-gray-400">
+                  +{entry.files!.length - 3}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

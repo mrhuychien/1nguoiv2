@@ -34,7 +34,7 @@ export const AGENT_CONFIGS: Record<AgentId, AIAgentConfig> = {
   spark: {
     agentId: 'spark',
     provider: 'openai',
-    model: 'gpt-5.2-2025-12-11',
+    model: 'gpt-4o',
   },
   lens: {
     agentId: 'lens',
