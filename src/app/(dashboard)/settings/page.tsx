@@ -8,13 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useUser } from "@/hooks/use-user";
 import { createClient } from "@/lib/supabase/client";
-import { User, Mail, Bell, Shield, Loader2, Check } from "lucide-react";
+import { User, Mail, Bell, Shield, Loader2, Check, Palette } from "lucide-react";
+import { ChangePasswordModal } from "@/components/settings/change-password-modal";
+import { ThemeToggleLarge } from "@/components/ui/theme-toggle";
 
 export default function SettingsPage() {
   const { userInfo, signOut, user } = useUser();
   const [fullName, setFullName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   useEffect(() => {
     if (userInfo?.fullName) {
@@ -141,6 +144,28 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Appearance Settings */}
+      <Card>
+        <CardHeader className="p-4 md:p-6">
+          <div className="flex items-center gap-2">
+            <Palette className="h-5 w-5 text-cyan" />
+            <CardTitle className="text-lg md:text-xl">Giao diện</CardTitle>
+          </div>
+          <CardDescription>
+            Tùy chỉnh giao diện ứng dụng
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 md:p-6 pt-0 space-y-4">
+          <div className="space-y-2">
+            <Label>Chế độ hiển thị</Label>
+            <ThemeToggleLarge />
+            <p className="text-xs text-text-muted mt-2">
+              Chọn chế độ sáng hoặc tối phù hợp với sở thích của bạn
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Notification Settings */}
       <Card>
         <CardHeader className="p-4 md:p-6">
@@ -171,7 +196,11 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-4 md:p-6 pt-0 space-y-4">
-          <Button variant="outline" className="w-full sm:w-auto">
+          <Button
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => setIsPasswordModalOpen(true)}
+          >
             Đổi mật khẩu
           </Button>
           <div className="pt-4 border-t border-border">
@@ -181,6 +210,12 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
+      />
     </div>
   );
 }

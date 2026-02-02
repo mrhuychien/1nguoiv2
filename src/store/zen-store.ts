@@ -14,14 +14,35 @@ import {
   DeepWorkZone,
   DEFAULT_SCHEDULE_BLOCKS,
   DEFAULT_TIMER_CONFIG,
+  ProjectTask,
+  TemplateId,
+  TaskStatus,
+  WorkLogEntry,
 } from "@/types/zen";
 import { generateId } from "@/lib/utils";
+import {
+  generateTasksFromTemplate,
+  getTemplateById,
+} from "@/lib/data/project-templates";
 
 interface ZenStoreState {
+  // Data loading
+  isInitialized: boolean;
+
   // Projects & Tasks
   projects: ZenProject[];
   activeProjectId: string | null;
   activeTaskId: string | null;
+
+  // Template Tasks (separate from project tasks)
+  templateTasks: ProjectTask[];
+
+  // Garden Tasks - only task IDs that have been dropped into the garden
+  gardenTaskIds: string[];
+
+  // Current Timer Task
+  currentTimerTaskId: string | null;
+  currentTimerTaskType: "template" | "manual" | null;
 
   // Timer
   timerState: TimerState;
@@ -41,19 +62,38 @@ interface ZenStoreState {
   // Sessions history
   sessions: ZenSession[];
 
+  // Work log - daily work history
+  workLog: WorkLogEntry[];
+
+  // Panel order for customizable layout
+  centerPanelOrder: string[];
+  rightPanelOrder: string[];
+
   // Stats
   stats: ZenStats;
 
   // UI State
   showSessionComplete: boolean;
+  showTaskCompleteDialog: boolean;
   showDeepWorkOverlay: boolean;
   showNewProjectModal: boolean;
   bellEnabled: boolean;
 }
 
 interface ZenStoreActions {
+  // Data setters (for Supabase sync)
+  setProjects: (projects: ZenProject[]) => void;
+  setStats: (stats: ZenStats) => void;
+  setIsInitialized: (initialized: boolean) => void;
+
   // Project actions
   addProject: (name: string, color: string, icon: string) => void;
+  addProjectWithTemplate: (
+    name: string,
+    color: string,
+    icon: string,
+    templateId: TemplateId
+  ) => void;
   updateProject: (id: string, updates: Partial<ZenProject>) => void;
   deleteProject: (id: string) => void;
   setActiveProject: (id: string | null) => void;
@@ -64,6 +104,17 @@ interface ZenStoreActions {
   deleteTask: (projectId: string, taskId: string) => void;
   completeTask: (projectId: string, taskId: string) => void;
   setActiveTask: (taskId: string | null) => void;
+
+  // Template Task actions
+  getProjectTemplateTasks: (projectId: string) => ProjectTask[];
+  getCurrentTemplateTask: (projectId: string) => ProjectTask | null;
+  updateTemplateTaskStatus: (taskId: string, status: TaskStatus) => void;
+  completeTemplateTask: (taskId: string) => void;
+  skipTemplateTask: (taskId: string) => void;
+  startTemplateTask: (taskId: string) => void;
+  resetTemplateTask: (taskId: string) => void;
+  updateTemplateTaskNotes: (taskId: string, notes: string) => void;
+  addTemplateTaskTime: (taskId: string, minutes: number) => void;
 
   // Timer actions
   startTimer: (minutes?: number) => void;
@@ -87,8 +138,30 @@ interface ZenStoreActions {
   startSession: () => void;
   endSession: (notes?: string) => void;
 
+  // Timer Task actions
+  setTimerTask: (taskId: string, taskType: "template" | "manual") => void;
+  clearTimerTask: () => void;
+  getCurrentTimerTask: () => { id: string; title: string; emoji?: string } | null;
+
+  // Garden Task actions
+  addToGarden: (taskId: string) => void;
+  removeFromGarden: (taskId: string) => void;
+  clearGarden: () => void;
+
+  // Work Log actions
+  addWorkLogEntry: (entry: Omit<WorkLogEntry, "id" | "date" | "timestamp">) => void;
+  getTodayWorkLog: () => WorkLogEntry[];
+  getWorkLogByDate: (date: string) => WorkLogEntry[];
+  clearWorkLog: () => void;
+
+  // Panel order actions
+  setCenterPanelOrder: (order: string[]) => void;
+  setRightPanelOrder: (order: string[]) => void;
+  resetPanelOrder: () => void;
+
   // UI actions
   setShowSessionComplete: (show: boolean) => void;
+  setShowTaskCompleteDialog: (show: boolean) => void;
   setShowDeepWorkOverlay: (show: boolean) => void;
   setShowNewProjectModal: (show: boolean) => void;
   toggleBell: () => void;
@@ -101,90 +174,19 @@ interface ZenStoreActions {
 
 type ZenStore = ZenStoreState & ZenStoreActions;
 
-// Mock projects for demo
-const mockProjects: ZenProject[] = [
-  {
-    id: "p1",
-    name: "1nguoi.com",
-    color: "#00d4ff",
-    icon: "rocket",
-    totalMinutes: 480,
-    completedMinutes: 245,
-    tasks: [
-      {
-        id: "t1",
-        projectId: "p1",
-        title: "Hoàn thành Zen Dashboard",
-        status: "in_progress",
-        estimatedMinutes: 120,
-        actualMinutes: 45,
-        priority: 1,
-        createdAt: new Date(),
-      },
-      {
-        id: "t2",
-        projectId: "p1",
-        title: "Tích hợp Supabase Auth",
-        status: "completed",
-        estimatedMinutes: 60,
-        actualMinutes: 55,
-        priority: 2,
-        completedAt: new Date(),
-        createdAt: new Date(),
-      },
-      {
-        id: "t3",
-        projectId: "p1",
-        title: "Thiết kế Landing Page",
-        status: "pending",
-        estimatedMinutes: 90,
-        actualMinutes: 0,
-        priority: 3,
-        createdAt: new Date(),
-      },
-    ],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: "p2",
-    name: "Blog cá nhân",
-    color: "#a855f7",
-    icon: "pen",
-    totalMinutes: 240,
-    completedMinutes: 120,
-    tasks: [
-      {
-        id: "t4",
-        projectId: "p2",
-        title: "Viết bài về Solopreneur",
-        status: "pending",
-        estimatedMinutes: 45,
-        actualMinutes: 0,
-        priority: 1,
-        createdAt: new Date(),
-      },
-    ],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: "p3",
-    name: "Học TypeScript",
-    color: "#22c55e",
-    icon: "book",
-    totalMinutes: 180,
-    completedMinutes: 90,
-    tasks: [],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-];
-
 const initialState: ZenStoreState = {
-  projects: mockProjects,
-  activeProjectId: "p1",
-  activeTaskId: "t1",
+  isInitialized: false,
+
+  projects: [],
+  activeProjectId: null,
+  activeTaskId: null,
+
+  templateTasks: [],
+
+  gardenTaskIds: [],
+
+  currentTimerTaskId: null,
+  currentTimerTaskType: null,
 
   timerState: "idle",
   timerSeconds: 0,
@@ -199,16 +201,23 @@ const initialState: ZenStoreState = {
   scheduleBlocks: DEFAULT_SCHEDULE_BLOCKS,
   sessions: [],
 
+  workLog: [],
+
+  // Default panel order
+  centerPanelOrder: ["garden", "worklog"],
+  rightPanelOrder: ["schedule", "stats"],
+
   stats: {
-    todayMinutes: 125,
-    weekMinutes: 840,
-    streak: 7,
-    flowSessions: 12,
-    tasksCompleted: 5,
-    projectsActive: 3,
+    todayMinutes: 0,
+    weekMinutes: 0,
+    streak: 0,
+    flowSessions: 0,
+    tasksCompleted: 0,
+    projectsActive: 0,
   },
 
   showSessionComplete: false,
+  showTaskCompleteDialog: false,
   showDeepWorkOverlay: false,
   showNewProjectModal: false,
   bellEnabled: true,
@@ -218,6 +227,24 @@ export const useZenStore = create<ZenStore>()(
   persist(
     (set, get) => ({
       ...initialState,
+
+      // Data setters (for Supabase sync)
+      setProjects: (projects) => {
+        set({ projects });
+        // Set first project as active if none selected
+        if (projects.length > 0 && !get().activeProjectId) {
+          set({ activeProjectId: projects[0].id });
+          // Set first task as active if available
+          const firstTask = projects[0].tasks[0];
+          if (firstTask && !get().activeTaskId) {
+            set({ activeTaskId: firstTask.id });
+          }
+        }
+      },
+
+      setStats: (stats) => set({ stats }),
+
+      setIsInitialized: (initialized) => set({ isInitialized: initialized }),
 
       // Project actions
       addProject: (name, color, icon) => {
@@ -234,6 +261,40 @@ export const useZenStore = create<ZenStore>()(
         };
         set((state) => ({
           projects: [...state.projects, newProject],
+          showNewProjectModal: false,
+        }));
+      },
+
+      addProjectWithTemplate: (name, color, icon, templateId) => {
+        const template = getTemplateById(templateId);
+        const projectId = generateId();
+        const totalMinutes = template
+          ? template.tasks.reduce((sum, t) => sum + t.estimatedMinutes, 0)
+          : 0;
+
+        const newProject: ZenProject = {
+          id: projectId,
+          name,
+          color,
+          icon,
+          totalMinutes,
+          completedMinutes: 0,
+          tasks: [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          templateId,
+          currentPhase: 1,
+          totalTasks: template?.tasks.length || 0,
+          completedTasks: 0,
+        };
+
+        // Generate template tasks
+        const newTasks = generateTasksFromTemplate(projectId, templateId);
+
+        set((state) => ({
+          projects: [...state.projects, newProject],
+          templateTasks: [...state.templateTasks, ...newTasks],
+          activeProjectId: projectId,
           showNewProjectModal: false,
         }));
       },
@@ -330,6 +391,155 @@ export const useZenStore = create<ZenStore>()(
       },
 
       setActiveTask: (taskId) => set({ activeTaskId: taskId }),
+
+      // Template Task actions
+      getProjectTemplateTasks: (projectId) => {
+        return get()
+          .templateTasks.filter((t) => t.projectId === projectId)
+          .sort((a, b) => a.phase - b.phase);
+      },
+
+      getCurrentTemplateTask: (projectId) => {
+        const tasks = get().getProjectTemplateTasks(projectId);
+        return (
+          tasks.find((t) => t.status === "in_progress") ||
+          tasks.find((t) => t.status === "pending") ||
+          null
+        );
+      },
+
+      updateTemplateTaskStatus: (taskId, status) => {
+        set({
+          templateTasks: get().templateTasks.map((t) =>
+            t.id === taskId
+              ? {
+                  ...t,
+                  status,
+                  completedAt:
+                    status === "completed" ? new Date().toISOString() : t.completedAt,
+                }
+              : t
+          ),
+        });
+
+        // Update project progress
+        const task = get().templateTasks.find((t) => t.id === taskId);
+        if (task) {
+          const projectTasks = get().getProjectTemplateTasks(task.projectId);
+          const completedCount = projectTasks.filter(
+            (t) => t.status === "completed"
+          ).length;
+          const currentPhase =
+            projectTasks.find(
+              (t) => t.status === "in_progress" || t.status === "pending"
+            )?.phase || projectTasks.length;
+
+          const completedMinutes = projectTasks
+            .filter((t) => t.status === "completed")
+            .reduce((sum, t) => sum + t.timeSpentMinutes, 0);
+
+          // Update the project
+          set({
+            projects: get().projects.map((p) =>
+              p.id === task.projectId
+                ? {
+                    ...p,
+                    completedTasks: completedCount,
+                    currentPhase,
+                    completedMinutes,
+                    updatedAt: new Date(),
+                  }
+                : p
+            ),
+          });
+        }
+      },
+
+      completeTemplateTask: (taskId) => {
+        get().updateTemplateTaskStatus(taskId, "completed");
+      },
+
+      skipTemplateTask: (taskId) => {
+        get().updateTemplateTaskStatus(taskId, "skipped");
+      },
+
+      startTemplateTask: (taskId) => {
+        // Set all other in_progress tasks to pending first
+        const task = get().templateTasks.find((t) => t.id === taskId);
+        if (!task) return;
+
+        set({
+          templateTasks: get().templateTasks.map((t) => ({
+            ...t,
+            status:
+              t.projectId === task.projectId && t.status === "in_progress"
+                ? "pending"
+                : t.status,
+          })),
+        });
+
+        get().updateTemplateTaskStatus(taskId, "in_progress");
+      },
+
+      resetTemplateTask: (taskId) => {
+        // Reset task back to pending status
+        const task = get().templateTasks.find((t) => t.id === taskId);
+        if (!task) return;
+
+        set({
+          templateTasks: get().templateTasks.map((t) =>
+            t.id === taskId
+              ? { ...t, status: "pending" as TaskStatus, completedAt: null }
+              : t
+          ),
+        });
+
+        // Update project progress
+        const projectTasks = get().getProjectTemplateTasks(task.projectId);
+        const completedCount = projectTasks.filter(
+          (t) => t.id !== taskId && t.status === "completed"
+        ).length;
+        const currentPhase =
+          projectTasks.find(
+            (t) => t.status === "in_progress" || t.status === "pending"
+          )?.phase || 1;
+
+        const completedMinutes = projectTasks
+          .filter((t) => t.id !== taskId && t.status === "completed")
+          .reduce((sum, t) => sum + t.timeSpentMinutes, 0);
+
+        set({
+          projects: get().projects.map((p) =>
+            p.id === task.projectId
+              ? {
+                  ...p,
+                  completedTasks: completedCount,
+                  currentPhase,
+                  completedMinutes,
+                  updatedAt: new Date(),
+                }
+              : p
+          ),
+        });
+      },
+
+      updateTemplateTaskNotes: (taskId, notes) => {
+        set({
+          templateTasks: get().templateTasks.map((t) =>
+            t.id === taskId ? { ...t, notes } : t
+          ),
+        });
+      },
+
+      addTemplateTaskTime: (taskId, minutes) => {
+        set({
+          templateTasks: get().templateTasks.map((t) =>
+            t.id === taskId
+              ? { ...t, timeSpentMinutes: t.timeSpentMinutes + minutes }
+              : t
+          ),
+        });
+      },
 
       // Timer actions
       startTimer: (minutes) => {
@@ -473,8 +683,101 @@ export const useZenStore = create<ZenStore>()(
         });
       },
 
+      // Timer Task actions
+      setTimerTask: (taskId, taskType) => {
+        set({ currentTimerTaskId: taskId, currentTimerTaskType: taskType });
+      },
+
+      clearTimerTask: () => {
+        set({ currentTimerTaskId: null, currentTimerTaskType: null });
+      },
+
+      getCurrentTimerTask: () => {
+        const { currentTimerTaskId, currentTimerTaskType, templateTasks, projects, activeProjectId } = get();
+        if (!currentTimerTaskId || !currentTimerTaskType) return null;
+
+        if (currentTimerTaskType === "template") {
+          const task = templateTasks.find((t) => t.id === currentTimerTaskId);
+          if (task) {
+            return { id: task.id, title: task.title, emoji: task.emoji };
+          }
+        } else {
+          // Manual task
+          const project = projects.find((p) => p.id === activeProjectId);
+          const task = project?.tasks.find((t) => t.id === currentTimerTaskId);
+          if (task) {
+            return { id: task.id, title: task.title };
+          }
+        }
+        return null;
+      },
+
+      // Garden Task actions
+      addToGarden: (taskId) => {
+        set((state) => ({
+          gardenTaskIds: state.gardenTaskIds.includes(taskId)
+            ? state.gardenTaskIds
+            : [...state.gardenTaskIds, taskId],
+        }));
+      },
+
+      removeFromGarden: (taskId) => {
+        set((state) => ({
+          gardenTaskIds: state.gardenTaskIds.filter((id) => id !== taskId),
+        }));
+      },
+
+      clearGarden: () => {
+        set({ gardenTaskIds: [] });
+      },
+
+      // Work Log actions
+      addWorkLogEntry: (entry) => {
+        const now = new Date();
+        const date = now.toISOString().split("T")[0]; // YYYY-MM-DD
+        const newEntry: WorkLogEntry = {
+          ...entry,
+          id: generateId(),
+          date,
+          timestamp: now.toISOString(),
+        };
+        set((state) => ({
+          workLog: [newEntry, ...state.workLog],
+        }));
+      },
+
+      getTodayWorkLog: () => {
+        const today = new Date().toISOString().split("T")[0];
+        return get().workLog.filter((entry) => entry.date === today);
+      },
+
+      getWorkLogByDate: (date) => {
+        return get().workLog.filter((entry) => entry.date === date);
+      },
+
+      clearWorkLog: () => {
+        set({ workLog: [] });
+      },
+
+      // Panel order actions
+      setCenterPanelOrder: (order) => {
+        set({ centerPanelOrder: order });
+      },
+
+      setRightPanelOrder: (order) => {
+        set({ rightPanelOrder: order });
+      },
+
+      resetPanelOrder: () => {
+        set({
+          centerPanelOrder: ["garden", "worklog"],
+          rightPanelOrder: ["schedule", "stats"],
+        });
+      },
+
       // UI actions
       setShowSessionComplete: (show) => set({ showSessionComplete: show }),
+      setShowTaskCompleteDialog: (show) => set({ showTaskCompleteDialog: show }),
       setShowDeepWorkOverlay: (show) => set({ showDeepWorkOverlay: show }),
       setShowNewProjectModal: (show) => set({ showNewProjectModal: show }),
 
@@ -536,6 +839,11 @@ export const useZenStore = create<ZenStore>()(
         stats: state.stats,
         bellEnabled: state.bellEnabled,
         sessionsCompleted: state.sessionsCompleted,
+        templateTasks: state.templateTasks,
+        gardenTaskIds: state.gardenTaskIds,
+        workLog: state.workLog,
+        centerPanelOrder: state.centerPanelOrder,
+        rightPanelOrder: state.rightPanelOrder,
       }),
     }
   )

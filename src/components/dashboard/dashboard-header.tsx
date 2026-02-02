@@ -1,43 +1,92 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Plus, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useUser } from "@/hooks/use-user";
+import { ProjectModal } from "@/components/projects/project-modal";
+import { useProjectStore } from "@/store/project-store";
+import { Project } from "@/types/database.types";
+import type { TemplateId } from "@/types/zen";
 
 export function DashboardHeader() {
-  const { profile } = useUser();
+  const { profile, isLoading, user } = useUser();
+  const { createProject } = useProjectStore();
+  const [isMounted, setIsMounted] = useState(false);
+  const [greeting, setGreeting] = useState("Xin chào");
+  const [dateString, setDateString] = useState("");
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const getGreeting = () => {
+  useEffect(() => {
+    setIsMounted(true);
+
+    // Set greeting based on time of day
     const hour = new Date().getHours();
-    if (hour < 12) return "Chào buổi sáng";
-    if (hour < 18) return "Chào buổi chiều";
-    return "Chào buổi tối";
-  };
+    if (hour < 12) setGreeting("Chào buổi sáng");
+    else if (hour < 18) setGreeting("Chào buổi chiều");
+    else setGreeting("Chào buổi tối");
 
-  const formatDate = () => {
-    return new Date().toLocaleDateString("vi-VN", {
+    // Set formatted date
+    setDateString(new Date().toLocaleDateString("vi-VN", {
       weekday: "long",
       year: "numeric",
       month: "long",
       day: "numeric",
-    });
+    }));
+  }, []);
+
+  const displayName = isMounted && !isLoading
+    ? (profile?.full_name?.split(" ")[0] || "Solopreneur")
+    : "...";
+
+  const handleSaveProject = async (data: Partial<Project> & { templateId?: TemplateId }): Promise<boolean> => {
+    if (!user?.id) return false;
+
+    try {
+      const result = await createProject({
+        user_id: user.id,
+        title: data.title || "Untitled",
+        description: data.description || null,
+        status: data.status || "active",
+        lifecycle: data.lifecycle || "idea",
+        health: "on-track",
+        is_focus: false,
+        progress: data.progress || 0,
+        deadline: data.deadline || null,
+        last_task: null,
+        current_task: data.current_task || null,
+      });
+      return result !== null;
+    } catch (error) {
+      console.error("Error creating project:", error);
+      return false;
+    }
   };
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h2 className="text-2xl font-bold text-text-primary">
-          {getGreeting()}, {profile?.full_name?.split(" ")[0] || "Solopreneur"}!
-        </h2>
-        <p className="text-text-secondary flex items-center gap-2 mt-1">
-          <Calendar className="h-4 w-4" />
-          {formatDate()}
-        </p>
+    <>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-text-primary">
+            {greeting}, {displayName}!
+          </h2>
+          <p className="text-text-secondary flex items-center gap-2 mt-1">
+            <Calendar className="h-4 w-4" />
+            {isMounted ? dateString : "Đang tải..."}
+          </p>
+        </div>
+        <Button onClick={() => setIsModalOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Tạo dự án mới
+        </Button>
       </div>
-      <Button>
-        <Plus className="h-4 w-4 mr-2" />
-        Tạo dự án mới
-      </Button>
-    </div>
+
+      <ProjectModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSaveProject}
+        mode="create"
+      />
+    </>
   );
 }

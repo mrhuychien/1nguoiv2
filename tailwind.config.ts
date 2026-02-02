@@ -9,21 +9,22 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Background colors
+        // Background colors - using CSS variables for theme support
         background: {
-          DEFAULT: "#0a0a0f",
-          secondary: "#12121a",
-          tertiary: "#1a1a24",
+          DEFAULT: "var(--background)",
+          secondary: "var(--background-secondary)",
+          tertiary: "var(--background-tertiary)",
         },
-        // Text colors
+        // Text colors - using CSS variables for theme support
         text: {
-          primary: "#e8e8ed",
-          secondary: "#8888a0",
-          muted: "#5c5c70",
+          primary: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+          muted: "var(--text-muted)",
         },
-        // Brand colors
+        // Brand colors - using CSS variables for theme support
         cyan: {
-          DEFAULT: "#00d4ff",
+          DEFAULT: "var(--cyan)",
+          light: "var(--cyan-light)",
           50: "#e6fbff",
           100: "#ccf7ff",
           200: "#99efff",
@@ -36,7 +37,7 @@ const config: Config = {
           900: "#002a33",
         },
         purple: {
-          DEFAULT: "#a855f7",
+          DEFAULT: "var(--purple)",
           50: "#faf5ff",
           100: "#f3e8ff",
           200: "#e9d5ff",
@@ -48,24 +49,40 @@ const config: Config = {
           800: "#6b21a8",
           900: "#581c87",
         },
-        // Status colors
-        success: "#22c55e",
-        warning: "#eab308",
-        danger: "#ef4444",
-        // Border colors
+        // Status colors - using CSS variables for theme support
+        success: "var(--success)",
+        warning: "var(--warning)",
+        danger: "var(--danger)",
+        // Border colors - using CSS variables for theme support
         border: {
-          DEFAULT: "#2a2a3c",
-          hover: "#3a3a4c",
+          DEFAULT: "var(--border)",
+          hover: "var(--border-hover)",
+        },
+        // Card colors
+        card: {
+          DEFAULT: "var(--card)",
+          hover: "var(--card-hover)",
         },
       },
       fontFamily: {
         sans: ["var(--font-be-vietnam)", "system-ui", "sans-serif"],
         mono: ["var(--font-jetbrains)", "monospace"],
       },
+      fontSize: {
+        // Improved font sizes for better readability
+        "xs": ["0.8125rem", { lineHeight: "1.5" }],    // 13px
+        "sm": ["0.9375rem", { lineHeight: "1.5" }],    // 15px
+        "base": ["1rem", { lineHeight: "1.6" }],       // 16px
+        "lg": ["1.125rem", { lineHeight: "1.5" }],     // 18px
+        "xl": ["1.25rem", { lineHeight: "1.4" }],      // 20px
+        "2xl": ["1.5rem", { lineHeight: "1.3" }],      // 24px
+        "3xl": ["1.875rem", { lineHeight: "1.3" }],    // 30px
+        "4xl": ["2.25rem", { lineHeight: "1.2" }],     // 36px
+      },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic": "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
-        "gradient-primary": "linear-gradient(135deg, #00d4ff 0%, #a855f7 100%)",
+        "gradient-primary": "linear-gradient(135deg, var(--cyan) 0%, var(--purple) 100%)",
       },
       boxShadow: {
         "glow-cyan": "0 0 20px rgba(0, 212, 255, 0.3)",

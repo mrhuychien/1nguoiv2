@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Trash2 } from "lucide-react";
+import { X, Trash2, Link2, Link2Off } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -9,7 +9,19 @@ import { ColorPicker } from "./color-picker";
 import { useIdeaStore } from "@/store/idea-store";
 
 export function NodePanel() {
-  const { getSelectedNode, updateNode, deleteNode, selectNode } = useIdeaStore();
+  const {
+    getSelectedNode,
+    updateNode,
+    deleteNode,
+    selectNode,
+    getNodeLinks,
+    nodes,
+    connectMode,
+    connectSourceId,
+    startConnectMode,
+    cancelConnectMode,
+    deleteLink,
+  } = useIdeaStore();
   const selectedNode = getSelectedNode();
 
   if (!selectedNode) {
@@ -90,6 +102,81 @@ export function NodePanel() {
             onChange={(color) => updateNode(selectedNode.id, { color })}
           />
         </div>
+
+        {/* Connect Button */}
+        <div className="space-y-2 pt-2">
+          <Label>Kết nối</Label>
+          {connectMode && connectSourceId === selectedNode.id ? (
+            <Button
+              variant="outline"
+              className="w-full border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10"
+              onClick={cancelConnectMode}
+            >
+              <Link2Off className="h-4 w-4 mr-2" />
+              Hủy kết nối
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              className="w-full border-cyan/50 text-cyan hover:bg-cyan/10"
+              onClick={() => startConnectMode(selectedNode.id)}
+            >
+              <Link2 className="h-4 w-4 mr-2" />
+              Kết nối với node khác
+            </Button>
+          )}
+          <p className="text-xs text-text-muted">
+            Click nút trên rồi click vào node muốn kết nối
+          </p>
+        </div>
+
+        {/* Current Connections */}
+        {(() => {
+          const nodeLinks = getNodeLinks(selectedNode.id);
+          if (nodeLinks.length === 0) return null;
+
+          return (
+            <div className="space-y-2 pt-2">
+              <Label>Đã kết nối ({nodeLinks.length})</Label>
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {nodeLinks.map((link) => {
+                  const connectedNodeId =
+                    link.source_id === selectedNode.id
+                      ? link.target_id
+                      : link.source_id;
+                  const connectedNode = nodes.find((n) => n.id === connectedNodeId);
+
+                  if (!connectedNode) return null;
+
+                  return (
+                    <div
+                      key={link.id}
+                      className="flex items-center justify-between p-2 bg-background-tertiary rounded-lg"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: connectedNode.color }}
+                        />
+                        <span className="text-sm text-text-secondary truncate max-w-[150px]">
+                          {connectedNode.title}
+                        </span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-text-muted hover:text-red-400"
+                        onClick={() => deleteLink(link.id)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Footer */}

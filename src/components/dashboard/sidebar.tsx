@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Lightbulb, FolderKanban, Settings, LogOut, ChevronLeft, ChevronRight, X, Sparkles } from "lucide-react";
+import { LayoutDashboard, Lightbulb, FolderKanban, Settings, LogOut, ChevronLeft, ChevronRight, X, Sparkles, Brain, Shield, Swords } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -27,14 +27,33 @@ const navItems = [
     icon: Lightbulb,
   },
   {
+    href: "/brainstorm",
+    label: "Brainstorm",
+    icon: Brain,
+  },
+  {
+    href: "/combat",
+    label: "Combat",
+    icon: Swords,
+  },
+  {
     href: "/projects",
     label: "Projects",
     icon: FolderKanban,
   },
   {
     href: "/settings",
-    label: "Cài đặt",
+    label: "Cai dat",
     icon: Settings,
+  },
+];
+
+// Admin-only nav items
+const adminNavItems = [
+  {
+    href: "/admin",
+    label: "Admin",
+    icon: Shield,
   },
 ];
 
@@ -45,8 +64,20 @@ interface SidebarProps {
 
 export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
-  const { userInfo, signOut } = useUser();
+  const { userInfo, profile, signOut, isLoading } = useUser();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Check if user is admin
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'super_admin';
+
+  // Combine nav items based on role
+  const allNavItems = isAdmin ? [...navItems, ...adminNavItems] : navItems;
+
+  // Prevent hydration mismatch by only rendering user content after mount
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Close mobile sidebar when route changes
   useEffect(() => {
@@ -137,7 +168,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
               <ChevronRight className="h-4 w-4" />
             </button>
           )}
-          {navItems.map((item) => {
+          {allNavItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
 
@@ -180,18 +211,20 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
             )}
           >
             <Avatar className="h-9 w-9">
-              <AvatarImage src={userInfo?.avatarUrl || ""} />
+              {isMounted && <AvatarImage src={userInfo?.avatarUrl || ""} />}
               <AvatarFallback>
-                {getInitials(userInfo?.fullName || userInfo?.email || null)}
+                {isMounted ? getInitials(userInfo?.fullName || userInfo?.email || null) : "U"}
               </AvatarFallback>
             </Avatar>
             {(!isCollapsed || isMobileOpen) && (
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-text-primary truncate">
-                  {userInfo?.fullName || "User"}
+                  {isMounted && !isLoading
+                    ? (userInfo?.fullName || userInfo?.email?.split('@')[0] || "User")
+                    : "..."}
                 </p>
                 <p className="text-xs text-text-muted truncate">
-                  {userInfo?.email}
+                  {isMounted && !isLoading ? userInfo?.email : ""}
                 </p>
               </div>
             )}
@@ -203,6 +236,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                     size="icon"
                     onClick={handleSignOut}
                     className="flex-shrink-0"
+                    disabled={!isMounted}
                   >
                     <LogOut className="h-4 w-4" />
                   </Button>
@@ -219,6 +253,7 @@ export function Sidebar({ isMobileOpen, onMobileClose }: SidebarProps) {
                   size="icon"
                   onClick={handleSignOut}
                   className="w-full mt-2"
+                  disabled={!isMounted}
                 >
                   <LogOut className="h-4 w-4" />
                 </Button>

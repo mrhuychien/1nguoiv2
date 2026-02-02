@@ -5,17 +5,20 @@ import { useReactFlow } from "reactflow";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useIdeaStore } from "@/store/idea-store";
+import { useIdeaData } from "@/hooks/use-idea-data";
 
 export function Toolbar() {
   const { zoomIn, zoomOut, fitView, getViewport } = useReactFlow();
   const { addNode, selectedNodeId, deleteNode } = useIdeaStore();
+  const { userId } = useIdeaData();
 
   const handleAddNode = () => {
+    if (!userId) return;
     const viewport = getViewport();
     // Add node at center of viewport
     const x = (-viewport.x + 400) / viewport.zoom;
     const y = (-viewport.y + 300) / viewport.zoom;
-    addNode(x, y);
+    addNode(x, y, userId);
   };
 
   const handleDelete = () => {

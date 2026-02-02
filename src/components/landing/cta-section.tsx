@@ -30,29 +30,35 @@ export function CTASection() {
   }, []);
 
   return (
-    <section className="py-24" ref={ref}>
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section className="py-16 px-4 sm:px-6 lg:px-8" ref={ref}>
+      <div className="mx-auto max-w-7xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6 }}
-          className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-cyan/20 via-purple/10 to-transparent border border-border p-8 md:p-12 lg:p-16"
+          className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-cyan/20 via-purple/20 to-pink-500/20 border border-border p-8 md:p-12"
         >
           {/* Background decoration */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-cyan/10 rounded-full blur-3xl" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple/10 rounded-full blur-3xl" />
 
           <div className="relative z-10 text-center max-w-2xl mx-auto">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-text-primary mb-6">
-              Sẵn sàng xây dựng
-              <br />
-              <span className="text-gradient">một mình, không cô đơn?</span>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-text-primary mb-4">
+              <span className="text-gradient">1 NGƯỜI</span> = Đủ để tạo ra sản phẩm
             </h2>
-            <p className="text-lg text-text-secondary mb-8">
-              {user
-                ? "Tiếp tục hành trình xây dựng business của bạn."
-                : "Tham gia cùng những solopreneur khác đang sử dụng 1nguoi để biến ý tưởng thành hiện thực."}
+            <p className="text-text-secondary mb-6 max-w-xl mx-auto">
+              Hệ sinh thái 1NGUOI cung cấp đầy đủ công cụ và quy trình để một cá nhân
+              đi từ ý tưởng → sản phẩm → thị trường, với sự hỗ trợ của AI tại mỗi bước.
             </p>
+
+            {/* Tags */}
+            <div className="flex flex-wrap justify-center gap-4 text-sm mb-8">
+              <span className="bg-cyan/20 text-cyan px-4 py-2 rounded-full">🧠 Think with AI</span>
+              <span className="bg-orange-500/20 text-orange-400 px-4 py-2 rounded-full">⚙️ Build with AI</span>
+              <span className="bg-green-500/20 text-green-400 px-4 py-2 rounded-full">🚀 Launch with Strategy</span>
+            </div>
+
+            {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               {user ? (
                 <Button size="xl" asChild>
@@ -69,17 +75,7 @@ export function CTASection() {
                   </Link>
                 </Button>
               )}
-              <Button size="xl" variant="outline" asChild>
-                <a href="mailto:hello@1nguoi.com">
-                  Liên hệ team
-                </a>
-              </Button>
             </div>
-            {!user && (
-              <p className="text-sm text-text-muted mt-6">
-                Không cần thẻ tín dụng. Bắt đầu trong 30 giây.
-              </p>
-            )}
           </div>
         </motion.div>
       </div>

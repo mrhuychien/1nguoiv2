@@ -1,8 +1,8 @@
 "use client";
 
 import { create } from "zustand";
-import { Node, Link } from "@/types/database.types";
-import { generateId } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
+import { Node, Link, NodeInsert, LinkInsert, Graph } from "@/types/database.types";
 
 // Obsidian-style color palette
 export const NODE_COLORS = [
@@ -15,38 +15,73 @@ export const NODE_COLORS = [
 ] as const;
 
 type IdeaNode = Node;
-
 type IdeaLink = Link;
 
 interface IdeaState {
   nodes: IdeaNode[];
   links: IdeaLink[];
+  graphs: Graph[];
   selectedNodeId: string | null;
   graphId: string | null;
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | null;
+  searchQuery: string;
+  searchResults: string[];
+  connectMode: boolean;
+  connectSourceId: string | null;
 }
 
 interface IdeaActions {
+  // Supabase operations
+  fetchAll: (userId: string) => Promise<void>;
+  fetchGraphs: (userId: string) => Promise<void>;
+  fetchNodesAndLinks: (graphId: string) => Promise<void>;
+  createGraph: (userId: string, title: string) => Promise<Graph | null>;
+  updateGraph: (id: string, updates: Partial<Graph>) => Promise<void>;
+  deleteGraph: (id: string) => Promise<void>;
+  selectGraph: (graphId: string) => Promise<void>;
+  getOrCreateDefaultGraph: (userId: string) => Promise<Graph | null>;
+
+  // Node database operations
+  createNodeInDb: (node: Omit<NodeInsert, "id" | "created_at" | "updated_at">) => Promise<Node | null>;
+  updateNodeInDb: (id: string, updates: Partial<Node>) => Promise<void>;
+  deleteNodeInDb: (id: string) => Promise<void>;
+
+  // Link database operations
+  createLinkInDb: (link: Omit<LinkInsert, "id" | "created_at">) => Promise<Link | null>;
+  deleteLinkInDb: (id: string) => Promise<void>;
+
+  // Local state setters
   setNodes: (nodes: IdeaNode[]) => void;
   setLinks: (links: IdeaLink[]) => void;
   setGraphId: (graphId: string) => void;
 
-  // Node actions
-  addNode: (x: number, y: number) => void;
+  // Node actions (local + db)
+  addNode: (x: number, y: number, userId: string) => Promise<string | undefined>;
   updateNode: (id: string, updates: Partial<IdeaNode>) => void;
-  deleteNode: (id: string) => void;
+  deleteNode: (id: string) => Promise<void>;
   selectNode: (id: string | null) => void;
   moveNode: (id: string, x: number, y: number) => void;
+  saveNodePosition: (id: string) => Promise<void>;
 
-  // Link actions
-  addLink: (sourceId: string, targetId: string) => void;
-  deleteLink: (id: string) => void;
+  // Link actions (local + db)
+  addLink: (sourceId: string, targetId: string, userId: string) => Promise<void>;
+  deleteLink: (id: string) => Promise<void>;
+
+  // Connect mode actions
+  startConnectMode: (sourceId: string) => void;
+  cancelConnectMode: () => void;
+  completeConnection: (targetId: string, userId: string) => Promise<void>;
 
   // State
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;
+
+  // Search
+  setSearchQuery: (query: string) => void;
+  clearSearch: () => void;
 }
 
 interface IdeaGetters {
@@ -59,41 +94,362 @@ type IdeaStore = IdeaState & IdeaActions & IdeaGetters;
 const initialState: IdeaState = {
   nodes: [],
   links: [],
+  graphs: [],
   selectedNodeId: null,
   graphId: null,
   isLoading: false,
+  isInitialized: false,
   error: null,
+  searchQuery: "",
+  searchResults: [],
+  connectMode: false,
+  connectSourceId: null,
 };
 
 export const useIdeaStore = create<IdeaStore>((set, get) => ({
   ...initialState,
 
+  // ========== SUPABASE OPERATIONS ==========
+
+  fetchAll: async (userId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      // First get or create default graph
+      const graph = await get().getOrCreateDefaultGraph(userId);
+      if (!graph) {
+        throw new Error("Failed to get or create default graph");
+      }
+
+      // Then fetch nodes and links for that graph
+      await get().fetchNodesAndLinks(graph.id);
+
+      set({ isInitialized: true });
+    } catch (error) {
+      console.error("[Ideas] Error fetching:", error);
+      set({ error: (error as Error).message });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  fetchGraphs: async (userId: string) => {
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("graphs")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      set({ graphs: data || [] });
+    } catch (error) {
+      console.error("[Ideas] Error fetching graphs:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  fetchNodesAndLinks: async (graphId: string) => {
+    try {
+      const supabase = createClient();
+
+      const [nodesResult, linksResult] = await Promise.all([
+        supabase
+          .from("nodes")
+          .select("*")
+          .eq("graph_id", graphId)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("links")
+          .select("*")
+          .eq("graph_id", graphId)
+      ]);
+
+      if (nodesResult.error) throw nodesResult.error;
+      if (linksResult.error) throw linksResult.error;
+
+      console.log("[Ideas] Loaded", nodesResult.data?.length || 0, "nodes,", linksResult.data?.length || 0, "links");
+
+      set({
+        nodes: nodesResult.data || [],
+        links: linksResult.data || [],
+        graphId,
+      });
+    } catch (error) {
+      console.error("[Ideas] Error fetching nodes/links:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  createGraph: async (userId: string, title: string) => {
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { data, error } = await supabaseAny
+        .from("graphs")
+        .insert({
+          user_id: userId,
+          title,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        set((state) => ({ graphs: [data, ...state.graphs] }));
+      }
+      return data;
+    } catch (error) {
+      console.error("[Ideas] Error creating graph:", error);
+      set({ error: (error as Error).message });
+      return null;
+    }
+  },
+
+  updateGraph: async (id: string, updates: Partial<Graph>) => {
+    // Optimistic update
+    set((state) => ({
+      graphs: state.graphs.map((g) =>
+        g.id === id ? { ...g, ...updates, updated_at: new Date().toISOString() } : g
+      ),
+    }));
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { error } = await supabaseAny
+        .from("graphs")
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("[Ideas] Error updating graph:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  deleteGraph: async (id: string) => {
+    const { graphs, graphId } = get();
+
+    // Don't delete if it's the only graph
+    if (graphs.length <= 1) {
+      set({ error: "Không thể xóa graph duy nhất" });
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+
+      // Delete all links in this graph first
+      await supabaseAny.from("links").delete().eq("graph_id", id);
+
+      // Delete all nodes in this graph
+      await supabaseAny.from("nodes").delete().eq("graph_id", id);
+
+      // Delete the graph
+      const { error } = await supabaseAny.from("graphs").delete().eq("id", id);
+
+      if (error) throw error;
+
+      // Update local state
+      const remainingGraphs = graphs.filter((g) => g.id !== id);
+      set({ graphs: remainingGraphs });
+
+      // If we deleted the current graph, switch to another one
+      if (graphId === id && remainingGraphs.length > 0) {
+        await get().selectGraph(remainingGraphs[0].id);
+      }
+    } catch (error) {
+      console.error("[Ideas] Error deleting graph:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  selectGraph: async (graphId: string) => {
+    set({ isLoading: true, selectedNodeId: null });
+    try {
+      await get().fetchNodesAndLinks(graphId);
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  getOrCreateDefaultGraph: async (userId: string) => {
+    try {
+      const supabase = createClient();
+
+      // Fetch all user graphs
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { data: existingGraphs, error: fetchError } = await supabaseAny
+        .from("graphs")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+
+      if (fetchError) throw fetchError;
+
+      if (existingGraphs && existingGraphs.length > 0) {
+        set({ graphId: existingGraphs[0].id, graphs: existingGraphs });
+        return existingGraphs[0] as Graph;
+      }
+
+      // Create new default graph
+      const newGraph = await get().createGraph(userId, "Ý tưởng của tôi");
+      if (newGraph) {
+        set({ graphId: newGraph.id });
+      }
+      return newGraph;
+    } catch (error) {
+      console.error("[Ideas] Error getting/creating default graph:", error);
+      set({ error: (error as Error).message });
+      return null;
+    }
+  },
+
+  // Node database operations
+  createNodeInDb: async (nodeData) => {
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { data, error } = await supabaseAny
+        .from("nodes")
+        .insert(nodeData)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error("[Ideas] Error creating node:", error);
+      set({ error: (error as Error).message });
+      return null;
+    }
+  },
+
+  updateNodeInDb: async (id: string, updates: Partial<Node>) => {
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { error } = await supabaseAny
+        .from("nodes")
+        .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("[Ideas] Error updating node:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  deleteNodeInDb: async (id: string) => {
+    try {
+      const supabase = createClient();
+
+      // Delete associated links first
+      await supabase
+        .from("links")
+        .delete()
+        .or(`source_id.eq.${id},target_id.eq.${id}`);
+
+      // Then delete the node
+      const { error } = await supabase
+        .from("nodes")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("[Ideas] Error deleting node:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  // Link database operations
+  createLinkInDb: async (linkData) => {
+    try {
+      const supabase = createClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const supabaseAny = supabase as any;
+      const { data, error } = await supabaseAny
+        .from("links")
+        .insert(linkData)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error("[Ideas] Error creating link:", error);
+      set({ error: (error as Error).message });
+      return null;
+    }
+  },
+
+  deleteLinkInDb: async (id: string) => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("links")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("[Ideas] Error deleting link:", error);
+      set({ error: (error as Error).message });
+    }
+  },
+
+  // ========== LOCAL STATE SETTERS ==========
+
   setNodes: (nodes) => set({ nodes }),
   setLinks: (links) => set({ links }),
   setGraphId: (graphId) => set({ graphId }),
 
-  addNode: (x, y) => {
+  // ========== NODE ACTIONS ==========
+
+  addNode: async (x, y, userId) => {
+    const { graphId } = get();
+    if (!graphId) {
+      console.error("[Ideas] No graphId set");
+      return;
+    }
+
     const randomColor = NODE_COLORS[Math.floor(Math.random() * NODE_COLORS.length)].value;
-    const newNode: IdeaNode = {
-      id: generateId(),
-      graph_id: get().graphId || "default",
-      user_id: "user-1",
+
+    // Create node in database
+    const newNode = await get().createNodeInDb({
+      graph_id: graphId,
+      user_id: userId,
       title: "Ý tưởng mới",
       description: null,
       color: randomColor,
       position_x: x,
       position_y: y,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
+    });
 
-    set((state) => ({
-      nodes: [...state.nodes, newNode],
-      selectedNodeId: newNode.id,
-    }));
+    if (newNode) {
+      set((state) => ({
+        nodes: [...state.nodes, newNode],
+        selectedNodeId: newNode.id,
+      }));
+      return newNode.id;
+    }
+    return undefined;
   },
 
   updateNode: (id, updates) => {
+    // Optimistic update
     set((state) => ({
       nodes: state.nodes.map((node) =>
         node.id === id
@@ -101,9 +457,13 @@ export const useIdeaStore = create<IdeaStore>((set, get) => ({
           : node
       ),
     }));
+
+    // Persist to database
+    get().updateNodeInDb(id, updates);
   },
 
-  deleteNode: (id) => {
+  deleteNode: async (id) => {
+    // Optimistic update
     set((state) => ({
       nodes: state.nodes.filter((node) => node.id !== id),
       links: state.links.filter(
@@ -111,11 +471,15 @@ export const useIdeaStore = create<IdeaStore>((set, get) => ({
       ),
       selectedNodeId: state.selectedNodeId === id ? null : state.selectedNodeId,
     }));
+
+    // Delete from database
+    await get().deleteNodeInDb(id);
   },
 
   selectNode: (id) => set({ selectedNodeId: id }),
 
   moveNode: (id, x, y) => {
+    // Local update only (for dragging)
     set((state) => ({
       nodes: state.nodes.map((node) =>
         node.id === id
@@ -125,9 +489,24 @@ export const useIdeaStore = create<IdeaStore>((set, get) => ({
     }));
   },
 
-  addLink: (sourceId, targetId) => {
+  saveNodePosition: async (id) => {
+    const node = get().nodes.find((n) => n.id === id);
+    if (node) {
+      await get().updateNodeInDb(id, {
+        position_x: node.position_x,
+        position_y: node.position_y,
+      });
+    }
+  },
+
+  // ========== LINK ACTIONS ==========
+
+  addLink: async (sourceId, targetId, userId) => {
+    const { graphId, links } = get();
+    if (!graphId) return;
+
     // Don't create duplicate links or self-links
-    const existingLink = get().links.find(
+    const existingLink = links.find(
       (link) =>
         (link.source_id === sourceId && link.target_id === targetId) ||
         (link.source_id === targetId && link.target_id === sourceId)
@@ -135,32 +514,113 @@ export const useIdeaStore = create<IdeaStore>((set, get) => ({
 
     if (existingLink || sourceId === targetId) return;
 
-    const newLink: IdeaLink = {
-      id: generateId(),
-      graph_id: get().graphId || "default",
-      user_id: "user-1",
+    // Create link in database
+    const newLink = await get().createLinkInDb({
+      graph_id: graphId,
+      user_id: userId,
       source_id: sourceId,
       target_id: targetId,
-      created_at: new Date().toISOString(),
-    };
+    });
 
-    set((state) => ({
-      links: [...state.links, newLink],
-    }));
+    if (newLink) {
+      set((state) => ({
+        links: [...state.links, newLink],
+      }));
+    }
   },
 
-  deleteLink: (id) => {
+  deleteLink: async (id) => {
+    // Optimistic update
     set((state) => ({
       links: state.links.filter((link) => link.id !== id),
     }));
+
+    // Delete from database
+    await get().deleteLinkInDb(id);
   },
+
+  // ========== CONNECT MODE ==========
+
+  startConnectMode: (sourceId) => {
+    set({ connectMode: true, connectSourceId: sourceId });
+  },
+
+  cancelConnectMode: () => {
+    set({ connectMode: false, connectSourceId: null });
+  },
+
+  completeConnection: async (targetId, userId) => {
+    const { connectSourceId, links, graphId } = get();
+
+    if (!connectSourceId || !graphId || connectSourceId === targetId) {
+      set({ connectMode: false, connectSourceId: null });
+      return;
+    }
+
+    // Check for existing link
+    const existingLink = links.find(
+      (link) =>
+        (link.source_id === connectSourceId && link.target_id === targetId) ||
+        (link.source_id === targetId && link.target_id === connectSourceId)
+    );
+
+    if (existingLink) {
+      set({ connectMode: false, connectSourceId: null });
+      return;
+    }
+
+    // Create link in database
+    const newLink = await get().createLinkInDb({
+      graph_id: graphId,
+      user_id: userId,
+      source_id: connectSourceId,
+      target_id: targetId,
+    });
+
+    if (newLink) {
+      set((state) => ({
+        links: [...state.links, newLink],
+        connectMode: false,
+        connectSourceId: null,
+      }));
+    } else {
+      set({ connectMode: false, connectSourceId: null });
+    }
+  },
+
+  // ========== STATE ==========
 
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
 
   reset: () => set(initialState),
 
-  // Getters
+  // ========== SEARCH ==========
+
+  setSearchQuery: (query) => {
+    const { nodes } = get();
+    const normalizedQuery = query.toLowerCase().trim();
+
+    if (!normalizedQuery) {
+      set({ searchQuery: "", searchResults: [] });
+      return;
+    }
+
+    const results = nodes
+      .filter(
+        (node) =>
+          node.title.toLowerCase().includes(normalizedQuery) ||
+          (node.description && node.description.toLowerCase().includes(normalizedQuery))
+      )
+      .map((node) => node.id);
+
+    set({ searchQuery: query, searchResults: results });
+  },
+
+  clearSearch: () => set({ searchQuery: "", searchResults: [] }),
+
+  // ========== GETTERS ==========
+
   getSelectedNode: () => {
     const { nodes, selectedNodeId } = get();
     return nodes.find((node) => node.id === selectedNodeId);

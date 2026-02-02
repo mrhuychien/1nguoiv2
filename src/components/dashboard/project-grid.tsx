@@ -1,12 +1,13 @@
 "use client";
 
-import { MoreHorizontal, AlertTriangle, CheckCircle } from "lucide-react";
+import { MoreHorizontal, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/store/project-store";
+import { useProjectData } from "@/hooks/use-project-data";
 
 const healthConfig = {
   "on-track": {
@@ -27,8 +28,24 @@ const healthConfig = {
 };
 
 export function ProjectGrid() {
+  const { isLoading } = useProjectData();
   const { getActiveProjects } = useProjectStore();
   const activeProjects = getActiveProjects();
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-text-primary">
+            Dự án đang hoạt động
+          </h3>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-cyan" />
+        </div>
+      </div>
+    );
+  }
 
   if (activeProjects.length === 0) {
     return null;

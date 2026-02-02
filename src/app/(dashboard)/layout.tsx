@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { Navbar } from "@/components/dashboard/navbar";
 import { useTimerStore } from "@/store/timer-store";
 import { usePathname } from "next/navigation";
+import { UserProvider } from "@/contexts/user-context";
 
 export default function DashboardLayout({
   children,
@@ -46,18 +47,20 @@ export default function DashboardLayout({
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar
-        isMobileOpen={isMobileSidebarOpen}
-        onMobileClose={handleMobileClose}
-      />
-      {/* Main content - responsive margin */}
-      <main className="md:ml-64 transition-all duration-300 min-h-screen flex flex-col">
-        <Navbar title={getPageTitle()} onMenuClick={handleMenuClick} />
-        <div className="flex-1 overflow-auto">
-          {children}
-        </div>
-      </main>
-    </div>
+    <UserProvider>
+      <div className="min-h-screen bg-background">
+        <Sidebar
+          isMobileOpen={isMobileSidebarOpen}
+          onMobileClose={handleMobileClose}
+        />
+        {/* Main content - responsive margin */}
+        <main className="md:ml-64 transition-all duration-300 min-h-screen flex flex-col">
+          <Navbar title={getPageTitle()} onMenuClick={handleMenuClick} />
+          <div className="flex-1 overflow-auto">
+            {children}
+          </div>
+        </main>
+      </div>
+    </UserProvider>
   );
 }

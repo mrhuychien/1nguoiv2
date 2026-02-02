@@ -4,6 +4,7 @@ import { Bell, Search, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TimerMini } from "./timer-mini";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 interface NavbarProps {
   title?: string;
@@ -54,6 +55,9 @@ export function Navbar({ title, onMenuClick }: NavbarProps) {
           <div className="hidden sm:block">
             <TimerMini />
           </div>
+
+          {/* Theme Toggle */}
+          <ThemeToggle />
 
           {/* Notifications */}
           <Button variant="ghost" size="icon" className="relative">

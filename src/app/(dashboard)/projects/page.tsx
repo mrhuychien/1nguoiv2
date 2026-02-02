@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useProjectStore, mockProjects, mockTasks } from "@/store/project-store";
+import { useProjectStore } from "@/store/project-store";
+import { useProjectData } from "@/hooks/use-project-data";
 import { ProjectModal } from "@/components/projects/project-modal";
+import { NewProjectModal } from "@/components/zen/project-sidebar";
 import { Project } from "@/types/database.types";
-import { generateId } from "@/lib/utils";
+import { Loader2 } from "lucide-react";
+import Link from "next/link";
 import {
   Plus,
   MoreHorizontal,
@@ -24,6 +27,9 @@ import {
   Trash2,
   Play,
   ArrowRight,
+  Eye,
+  Brain,
+  Wand2,
 } from "lucide-react";
 
 type LifecycleFilter = "all" | "idea" | "designing" | "building" | "testing" | "shipped" | "paused";
@@ -139,6 +145,28 @@ function ProjectMenu({ project, onEdit, onDelete, onMoveNext, onPause, onResume 
               <Pencil className="h-4 w-4" />
               Chỉnh sửa
             </button>
+
+            {/* Brainstorm AI for idea stage projects */}
+            {project.lifecycle === "idea" && (
+              <Link
+                href={`/brainstorm?projectId=${project.id}&title=${encodeURIComponent(project.title)}&description=${encodeURIComponent(project.description || '')}`}
+                onClick={() => setIsOpen(false)}
+                className="w-full px-4 py-2 text-left text-sm hover:bg-purple-500/10 flex items-center gap-2 text-purple-500"
+              >
+                <Brain className="h-4 w-4" />
+                Brainstorm AI
+              </Link>
+            )}
+
+            {/* Vibecode Kit */}
+            <Link
+              href={`/projects/${project.id}/vibecode`}
+              onClick={() => setIsOpen(false)}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-cyan-500/10 flex items-center gap-2 text-cyan-500"
+            >
+              <Wand2 className="h-4 w-4" />
+              Vibecode Kit
+            </Link>
 
             {config.next && project.lifecycle !== "paused" && (
               <button
@@ -282,12 +310,13 @@ function ActiveProjectCard({
         ) : (
           <div />
         )}
-        <button
-          onClick={onEdit}
-          className="text-xs font-semibold text-cyan hover:underline underline-offset-4"
+        <Link
+          href={`/projects/${project.id}`}
+          className="flex items-center gap-1.5 text-xs font-semibold text-cyan hover:underline underline-offset-4"
         >
+          <Eye className="h-3.5 w-3.5" />
           Xem chi tiết
-        </button>
+        </Link>
       </div>
     </Card>
   );
@@ -309,10 +338,10 @@ function IdeaCard({
   return (
     <Card className="p-4 hover:border-yellow-500 transition-all group cursor-pointer relative">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <Lightbulb className="h-5 w-5 text-yellow-500" />
+        <Link href={`/projects/${project.id}`} className="flex items-center gap-3 flex-1 min-w-0">
+          <Lightbulb className="h-5 w-5 text-yellow-500 flex-shrink-0" />
           <h4 className="font-semibold text-sm truncate">{project.title}</h4>
-        </div>
+        </Link>
         <div className="relative">
           <button
             onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
@@ -350,9 +379,11 @@ function IdeaCard({
           )}
         </div>
       </div>
-      <p className="text-xs text-text-muted line-clamp-2 mb-3" onClick={onEdit}>
-        {project.description || "Chưa có mô tả"}
-      </p>
+      <Link href={`/projects/${project.id}`}>
+        <p className="text-xs text-text-muted line-clamp-2 mb-3">
+          {project.description || "Chưa có mô tả"}
+        </p>
+      </Link>
       <div className="flex items-center justify-between pt-3 border-t border-border/50">
         <span className="text-[10px] font-bold text-yellow-500">💡 IDEA</span>
         <span className="text-[10px] text-text-muted">
@@ -365,18 +396,16 @@ function IdeaCard({
 
 function ShippedCard({
   project,
-  onEdit,
   onDelete,
 }: {
   project: Project;
-  onEdit: () => void;
   onDelete: () => void;
 }) {
   const [showMenu, setShowMenu] = useState(false);
 
   return (
     <Card className="p-5 flex items-center justify-between group">
-      <div className="flex items-center gap-4" onClick={onEdit}>
+      <Link href={`/projects/${project.id}`} className="flex items-center gap-4 flex-1">
         <div className="w-10 h-10 rounded-lg bg-green-500/10 flex items-center justify-center text-green-500">
           <Rocket className="h-5 w-5" />
         </div>
@@ -386,7 +415,7 @@ function ShippedCard({
             Hoàn thành: {project.deadline ? new Date(project.deadline).toLocaleDateString("vi-VN") : "N/A"}
           </p>
         </div>
-      </div>
+      </Link>
       <div className="flex items-center gap-2">
         <span className="px-2 py-1 bg-green-500/10 text-green-500 text-[9px] font-bold rounded uppercase">
           🚀 SHIPPED
@@ -420,12 +449,10 @@ function ShippedCard({
 
 function PausedCard({
   project,
-  onEdit,
   onDelete,
   onResume,
 }: {
   project: Project;
-  onEdit: () => void;
   onDelete: () => void;
   onResume: () => void;
 }) {
@@ -433,7 +460,7 @@ function PausedCard({
 
   return (
     <Card className="p-5 flex items-center justify-between opacity-70 group hover:opacity-100 transition-opacity">
-      <div className="flex items-center gap-4" onClick={onEdit}>
+      <Link href={`/projects/${project.id}`} className="flex items-center gap-4 flex-1">
         <div className="w-10 h-10 rounded-lg bg-slate-500/10 flex items-center justify-center text-slate-500">
           <PauseCircle className="h-5 w-5" />
         </div>
@@ -443,7 +470,7 @@ function PausedCard({
             Tạm dừng từ: {project.updated_at ? new Date(project.updated_at).toLocaleDateString("vi-VN") : "N/A"}
           </p>
         </div>
-      </div>
+      </Link>
       <div className="flex items-center gap-2">
         <span className="px-2 py-1 bg-slate-500/10 text-slate-500 text-[9px] font-bold rounded uppercase">
           ⏸️ PAUSED
@@ -483,93 +510,75 @@ function PausedCard({
 }
 
 export default function ProjectsPage() {
-  const { projects, setProjects, setTasks, addProject, updateProject, deleteProject } = useProjectStore();
+  const { projects, isLoading } = useProjectData();
+  const { updateProjectInDb, deleteProjectFromDb } = useProjectStore();
   const [filter, setFilter] = useState<LifecycleFilter>("all");
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [modalMode, setModalMode] = useState<"create" | "edit">("create");
-
-  useEffect(() => {
-    if (projects.length === 0) {
-      setProjects(mockProjects);
-      setTasks(mockTasks);
-    }
-  }, [projects.length, setProjects, setTasks]);
 
   // Handlers
   const handleCreateProject = () => {
-    setEditingProject(null);
-    setModalMode("create");
-    setIsModalOpen(true);
+    setIsNewProjectModalOpen(true);
   };
 
   const handleEditProject = (project: Project) => {
     setEditingProject(project);
-    setModalMode("edit");
-    setIsModalOpen(true);
+    setIsEditModalOpen(true);
   };
 
-  const handleSaveProject = (data: Partial<Project>) => {
-    if (modalMode === "create") {
-      const newProject: Project = {
-        id: generateId(),
-        user_id: "user-1",
-        title: data.title || "Untitled",
-        description: data.description || null,
-        status: data.status || "active",
-        lifecycle: data.lifecycle || "idea",
-        health: "on-track",
-        is_focus: false,
-        progress: data.progress || 0,
-        deadline: data.deadline || null,
-        last_task: null,
-        current_task: data.current_task || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      addProject(newProject);
-    } else if (editingProject) {
-      updateProject(editingProject.id, {
-        ...data,
-        updated_at: new Date().toISOString(),
-      });
+  const handleSaveProject = async (data: Partial<Project>): Promise<boolean> => {
+    if (!editingProject) return false;
+
+    try {
+      await updateProjectInDb(editingProject.id, data);
+      return true;
+    } catch (error) {
+      console.error("Error saving project:", error);
+      return false;
     }
   };
 
-  const handleDeleteProject = (id: string) => {
+  const handleDeleteProject = async (id: string) => {
     if (confirm("Bạn có chắc muốn xóa dự án này?")) {
-      deleteProject(id);
+      await deleteProjectFromDb(id);
     }
   };
 
-  const handleMoveToNextStage = (project: Project) => {
+  const handleMoveToNextStage = async (project: Project) => {
     const config = lifecycleConfig[project.lifecycle];
     if (config.next) {
-      updateProject(project.id, {
+      await updateProjectInDb(project.id, {
         lifecycle: config.next,
         status: config.next === "shipped" ? "completed" : "active",
         last_task: project.current_task,
         current_task: null,
-        updated_at: new Date().toISOString(),
       });
     }
   };
 
-  const handlePauseProject = (project: Project) => {
-    updateProject(project.id, {
+  const handlePauseProject = async (project: Project) => {
+    await updateProjectInDb(project.id, {
       lifecycle: "paused",
       status: "archived",
-      updated_at: new Date().toISOString(),
     });
   };
 
-  const handleResumeProject = (project: Project) => {
-    updateProject(project.id, {
+  const handleResumeProject = async (project: Project) => {
+    await updateProjectInDb(project.id, {
       lifecycle: "building", // Resume to building by default
       status: "active",
-      updated_at: new Date().toISOString(),
     });
   };
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-cyan" />
+      </div>
+    );
+  }
 
   // Filter projects by lifecycle
   const activeProjects = projects.filter(
@@ -707,7 +716,6 @@ export default function ProjectsPage() {
                     <ShippedCard
                       key={project.id}
                       project={project}
-                      onEdit={() => handleEditProject(project)}
                       onDelete={() => handleDeleteProject(project.id)}
                     />
                   ))}
@@ -727,7 +735,6 @@ export default function ProjectsPage() {
                     <PausedCard
                       key={project.id}
                       project={project}
-                      onEdit={() => handleEditProject(project)}
                       onDelete={() => handleDeleteProject(project.id)}
                       onResume={() => handleResumeProject(project)}
                     />
@@ -757,13 +764,19 @@ export default function ProjectsPage() {
           </div>
         )}
 
-        {/* Project Modal */}
+        {/* New Project Modal (unified) */}
+        <NewProjectModal
+          isOpen={isNewProjectModalOpen}
+          onClose={() => setIsNewProjectModalOpen(false)}
+        />
+
+        {/* Edit Project Modal */}
         <ProjectModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
           onSave={handleSaveProject}
           project={editingProject}
-          mode={modalMode}
+          mode="edit"
         />
       </div>
   );
